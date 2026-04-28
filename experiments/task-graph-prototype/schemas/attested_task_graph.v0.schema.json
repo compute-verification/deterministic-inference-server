@@ -1,0 +1,248 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "attested_task_graph.v0",
+  "title": "AttestedTaskGraph v0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "graph_version",
+    "run_id",
+    "tasks",
+    "artifacts",
+    "transmissions",
+    "log",
+    "compute_attestations",
+    "policies",
+    "tap_pubkeys",
+    "log_pubkey",
+    "hypervisor_pubkey",
+    "reviewer_pubkeys",
+    "external_artifact_ids"
+  ],
+  "properties": {
+    "graph_version": {"const": "v0"},
+    "run_id": {"type": "string", "minLength": 1},
+
+    "tap_pubkeys": {
+      "type": "object",
+      "additionalProperties": {"$ref": "#/$defs/hex64"}
+    },
+    "log_pubkey": {"$ref": "#/$defs/hex64"},
+    "hypervisor_pubkey": {"$ref": "#/$defs/hex64"},
+    "reviewer_pubkeys": {
+      "type": "object",
+      "additionalProperties": {"$ref": "#/$defs/hex64"}
+    },
+
+    "external_artifact_ids": {
+      "type": "array",
+      "items": {"type": "string"},
+      "uniqueItems": true
+    },
+
+    "tasks": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/task"}
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/artifact"}
+    },
+    "transmissions": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/transmission"}
+    },
+    "log": {"$ref": "#/$defs/log"},
+    "compute_attestations": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/compute_attestation"}
+    },
+    "policies": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/policy"}
+    }
+  },
+
+  "$defs": {
+    "hex64": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "hex128": {"type": "string", "pattern": "^[0-9a-f]{128}$"},
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+
+    "task": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "task_id", "pod_id", "operation",
+        "input_artifact_ids", "output_artifact_ids",
+        "claimed_flops", "interval_ms",
+        "partition"
+      ],
+      "properties": {
+        "task_id": {"type": "string", "minLength": 1},
+        "pod_id": {"type": "string", "minLength": 1},
+        "operation": {"type": "string", "minLength": 1},
+        "operation_params": {"type": "object"},
+        "input_artifact_ids": {"type": "array", "items": {"type": "string"}},
+        "output_artifact_ids": {"type": "array", "items": {"type": "string"}},
+        "claimed_flops": {"type": "integer", "minimum": 0},
+        "interval_ms": {
+          "type": "array",
+          "items": {"type": "integer", "minimum": 0},
+          "minItems": 2, "maxItems": 2
+        },
+        "partition": {"type": "string"},
+        "reviewer_signatures": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/reviewer_signature"}
+        }
+      }
+    },
+
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_id", "commitment", "size", "external"],
+      "properties": {
+        "artifact_id": {"type": "string", "minLength": 1},
+        "commitment": {"$ref": "#/$defs/sha256"},
+        "size": {"type": "integer", "minimum": 0},
+        "external": {"type": "boolean"},
+        "schema": {"type": "string"},
+        "producer_task_id": {"type": ["string", "null"]},
+        "consumer_task_ids": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+
+    "transmission": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tap_id", "tap_seq", "sender", "receiver",
+        "artifact_id", "commitment", "size",
+        "timestamp_ms", "tap_signature"
+      ],
+      "properties": {
+        "tap_id": {"type": "string"},
+        "tap_seq": {"type": "integer", "minimum": 0},
+        "sender": {"type": "string"},
+        "receiver": {"type": "string"},
+        "artifact_id": {"type": "string"},
+        "commitment": {"$ref": "#/$defs/sha256"},
+        "size": {"type": "integer", "minimum": 0},
+        "timestamp_ms": {"type": "integer", "minimum": 0},
+        "tap_signature": {"$ref": "#/$defs/hex128"}
+      }
+    },
+
+    "log": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["log_id", "tree_size", "root_hash", "sth_signature", "leaves", "inclusion_proofs"],
+      "properties": {
+        "log_id": {"type": "string"},
+        "tree_size": {"type": "integer", "minimum": 0},
+        "root_hash": {"$ref": "#/$defs/hex64"},
+        "sth_signature": {"$ref": "#/$defs/hex128"},
+        "previous_sths": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["tree_size", "root_hash", "sth_signature"],
+            "properties": {
+              "tree_size": {"type": "integer", "minimum": 0},
+              "root_hash": {"$ref": "#/$defs/hex64"},
+              "sth_signature": {"$ref": "#/$defs/hex128"}
+            }
+          }
+        },
+        "consistency_proofs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["from_size", "to_size", "path"],
+            "properties": {
+              "from_size": {"type": "integer", "minimum": 0},
+              "to_size": {"type": "integer", "minimum": 0},
+              "path": {"type": "array", "items": {"$ref": "#/$defs/hex64"}}
+            }
+          }
+        },
+        "leaves": {
+          "type": "array",
+          "description": "leaf at index i is the integer index referencing transmissions[i]; the leaf hash is sha256(0x00 || canonical_json_bytes(transmissions[i]))",
+          "items": {"type": "integer", "minimum": 0}
+        },
+        "inclusion_proofs": {
+          "type": "object",
+          "description": "map: leaf_index (string) -> array of sibling hashes from leaf to root",
+          "additionalProperties": {
+            "type": "array",
+            "items": {"$ref": "#/$defs/hex64"}
+          }
+        }
+      }
+    },
+
+    "compute_attestation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pod_id", "interval_ms", "claimed_flops", "signature"],
+      "properties": {
+        "pod_id": {"type": "string"},
+        "interval_ms": {
+          "type": "array",
+          "items": {"type": "integer", "minimum": 0},
+          "minItems": 2, "maxItems": 2
+        },
+        "claimed_flops": {"type": "integer", "minimum": 0},
+        "signature": {"$ref": "#/$defs/hex128"}
+      }
+    },
+
+    "reviewer_signature": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reviewer_id", "signature"],
+      "properties": {
+        "reviewer_id": {"type": "string"},
+        "signature": {"$ref": "#/$defs/hex128"}
+      }
+    },
+
+    "policy": {
+      "type": "object",
+      "required": ["kind"],
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {"const": "ancestry_compute_gate"},
+            "threshold_flops": {"type": "integer", "minimum": 0},
+            "required_reviewer_id": {"type": "string"}
+          },
+          "required": ["kind", "threshold_flops", "required_reviewer_id"]
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {"const": "partition_crossing"},
+            "from_partition": {"type": "string"},
+            "to_partition": {"type": "string"},
+            "allowed": {"type": "boolean"}
+          },
+          "required": ["kind", "from_partition", "to_partition", "allowed"]
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {"const": "replay_required"},
+            "min_sample_count": {"type": "integer", "minimum": 0}
+          },
+          "required": ["kind", "min_sample_count"]
+        }
+      ]
+    }
+  }
+}

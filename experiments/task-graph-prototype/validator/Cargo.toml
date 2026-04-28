@@ -1,0 +1,21 @@
+[package]
+name = "task_graph_validator"
+version = "0.1.0"
+edition = "2021"
+description = "Validator for the AttestedTaskGraph v0 schema"
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "validate"
+path = "src/bin/validate.rs"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+sha2 = "0.10"
+ed25519-dalek = { version = "2", features = ["rand_core"] }
+hex = "0.4"
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
