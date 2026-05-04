@@ -136,9 +136,7 @@ class TestSchedulerAgainstRealProver(unittest.TestCase):
                 break
             time.sleep(0.1)
         else:
-            self.fail(
-                f"scheduler did not exchange /graph + /replay + verdict in 5s: {entries!r}"
-            )
+            self.fail(f"scheduler did not exchange /graph + /replay + verdict in 5s: {entries!r}")
 
         # All received entries should have a 200 status (real prover, healthy).
         for e in graph_recv + replay_recv:

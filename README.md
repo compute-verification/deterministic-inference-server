@@ -117,6 +117,10 @@ python3 cmd/runner/main.py --manifest manifests/qwen3-1.7b.manifest.json \
 | **Scheduling** | Greedy decoding (temperature=0), fixed seed |
 | **Network frames** | Simulated TCP/IP stack with fixed MSS segmentation, software checksums, no offloads |
 
+## Demos
+
+- **Prover ↔ Verifier protocol** — wire-protocol demo that detects hidden training and exfiltration from external evidence alone. See [experiments/prover-verifier-demo/reports/memo.md](experiments/prover-verifier-demo/reports/memo.md) (CPU-only; `cd experiments/prover-verifier-demo && ./demo.sh --quick`).
+
 ## Repository Structure
 
 ```
