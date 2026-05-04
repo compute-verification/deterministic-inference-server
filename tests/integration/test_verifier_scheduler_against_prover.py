@@ -112,7 +112,10 @@ class TestSchedulerAgainstRealProver(unittest.TestCase):
         return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
 
     def test_scheduler_emits_graph_and_replay_to_real_prover(self) -> None:
-        # Wait up to ~5s for the scheduler to issue at least one of each.
+        # Wait up to ~5s for the scheduler to issue at least one of each AND
+        # for at least one /replay/verdict entry to be written. The verdict
+        # is appended after the streaming /replay round-trip completes, so
+        # polling only on /graph + /replay races the verdict write.
         deadline = time.monotonic() + 5.0
         while time.monotonic() < deadline:
             entries = self._read_transcript()
@@ -128,18 +131,20 @@ class TestSchedulerAgainstRealProver(unittest.TestCase):
             replay_recv = [
                 e for e in entries if e["endpoint"] == "/replay" and e["direction"] == "received"
             ]
-            if graph_sent and graph_recv and replay_sent and replay_recv:
+            verdicts = [e for e in entries if e["endpoint"].startswith("/replay/verdict/")]
+            if graph_sent and graph_recv and replay_sent and replay_recv and verdicts:
                 break
             time.sleep(0.1)
         else:
-            self.fail(f"scheduler did not exchange both /graph and /replay in 5s: {entries!r}")
+            self.fail(
+                f"scheduler did not exchange /graph + /replay + verdict in 5s: {entries!r}"
+            )
 
         # All received entries should have a 200 status (real prover, healthy).
         for e in graph_recv + replay_recv:
             self.assertEqual(e["status_code"], 200)
 
         # Phase 6.4 DoD: at least one replay verdict landed and it was pass.
-        verdicts = [e for e in entries if e["endpoint"].startswith("/replay/verdict/")]
         self.assertGreaterEqual(len(verdicts), 1, "no /replay/verdict entries recorded")
         for v in verdicts:
             self.assertEqual(v["status_code"], 200, f"verdict not pass: {v}")
