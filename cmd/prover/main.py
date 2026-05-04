@@ -32,6 +32,7 @@ if str(REPO_ROOT) not in sys.path:
 from pydantic import ValidationError as PydanticValidationError  # noqa: E402
 
 from pkg.common.contracts import ValidationError, validate_with_schema  # noqa: E402
+from pkg.proverdet.capture import ProverCaptureLog  # noqa: E402
 from pkg.proverdet.graph_builder import build_empty_graph  # noqa: E402
 from pkg.proverdet.replay import stub_evidence  # noqa: E402
 from pkg.proverdet.wire import ReplayRequest  # noqa: E402
@@ -58,6 +59,7 @@ class ProverState:
         self.verifier_url = verifier_url
         self.debug_mode = debug_mode
         self.lock = threading.Lock()
+        self.capture_log = ProverCaptureLog(out_dir / "capture.jsonl")
 
 
 class ProverHandler(BaseHTTPRequestHandler):
@@ -83,6 +85,13 @@ class ProverHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
+        if self.state is not None:
+            self.state.capture_log.record(
+                direction="sent",
+                endpoint=self.path,
+                payload=data,
+                status_code=status,
+            )
 
     # -- GET --
 
@@ -121,6 +130,12 @@ class ProverHandler(BaseHTTPRequestHandler):
 
     def _handle_post_replay(self) -> None:
         raw = self._read_body()
+        if self.state is not None:
+            self.state.capture_log.record(
+                direction="received",
+                endpoint=self.path,
+                payload=raw,
+            )
         if not raw:
             return self._send_json(400, {"error": "empty request body"})
         try:

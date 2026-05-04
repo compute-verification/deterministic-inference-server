@@ -114,6 +114,22 @@ class TestReplayEndpoint(_ProverFixture):
         except urllib.error.HTTPError as e:
             self.assertEqual(e.code, 404)
 
+    def test_capture_log_records_request_and_response(self) -> None:
+        import json as _json
+
+        status, _ = http_post_json(f"http://127.0.0.1:{self.port}/replay", self._replay_request())
+        self.assertEqual(status, 200)
+        capture = Path(self.tmp.name) / "capture.jsonl"  # type: ignore[arg-type]
+        lines = [_json.loads(line) for line in capture.read_text(encoding="utf-8").splitlines()]
+        # At minimum: one received request, one sent response on /replay.
+        replay_entries = [e for e in lines if e["endpoint"] == "/replay"]
+        directions = {e["direction"] for e in replay_entries}
+        self.assertIn("sent", directions)
+        self.assertIn("received", directions)
+        # Seqs are monotonic.
+        seqs = [e["seq"] for e in lines]
+        self.assertEqual(seqs, sorted(seqs))
+
 
 if __name__ == "__main__":
     unittest.main()
