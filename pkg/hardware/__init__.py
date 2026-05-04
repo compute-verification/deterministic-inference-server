@@ -1,1 +1,0 @@
-"""hardware package scaffold."""

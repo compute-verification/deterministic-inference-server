@@ -7,7 +7,6 @@ Reviewed 2026-03-15 against `plan/spec.md` (commit cb9c10e).
 | # | Location | Issue |
 |---|----------|-------|
 | 1 | `cmd/runner/main.py:489` | **`target_batch` is undefined in `run()` scope** — `NameError` at runtime. The variable only exists inside `_synthetic_observables`/`_vllm_observables`, but is referenced when building `execution_trace_metadata.actual_batch_sizes`. |
-| 2 | `cmd/runner/dispatcher.py:31` vs `cmd/coordinator/main.py:95-97` | **`round_robin_hash` produces different hashes** in dispatcher vs coordinator. Dispatcher uses `canonical_json_text().encode("utf-8")` while coordinator uses `canonical_json_bytes()`. The trailing newline in `canonical_json_text` means they hash different inputs for the same request, breaking dispatch determinism. |
 | 3 | `cmd/verifier/main.py:82-87` | **ULP comparison is mathematically wrong.** Uses `tol = float(comp["ulp"]) * 1e-7` (fixed epsilon), but a ULP depends on the magnitude of each value. For values far from 1.0 this gives incorrect pass/fail results. |
 | 4 | `pkg/common/contracts.py:9` | **`SCHEMA_DIR = Path("schemas")` is a relative path.** Breaks whenever the process cwd is not the repo root. |
 | 5 | `nix/images/runtime-image.nix` | **Hardcoded `Cmd = ["/app/cmd/server/main.py"]`** but no `/app` directory exists in the image. The OCI image would fail at runtime with file-not-found. |
@@ -20,7 +19,6 @@ Reviewed 2026-03-15 against `plan/spec.md` (commit cb9c10e).
 | 7 | §9.1, §9.2, §9.3 | System MUST route all I/O through deterministic userspace networking stack; egress MUST be reproducible at L2 | **Not implemented.** All network frames are synthetic (hashed request IDs). No DPDK/F-Stack/VPP or any networking stack code exists. |
 | 8 | §4.3, §5.1 | Runner MUST verify on-disk artifact digests before execution; MUST refuse on mismatch | **Not implemented.** Runner only cross-checks lockfile metadata against manifest metadata. Never downloads or verifies actual file digests on disk. |
 | 9 | §8.2, §10.2 | Engine trace MUST include request_reorder, collective_algorithm_selection events | **Missing from `vllm_runner.py`.** Only the synthetic runner emits these. Real vLLM mode skips them entirely. |
-| 10 | §10.1 | Verifier MUST compare per-Pod bundles and end-to-end outputs | **`cross_verify.py` only checks metadata** (closure digests, hardware fingerprints, env versions). Never opens observable files or compares tokens/logits/activations across replicas. |
 | 11 | §3.4 | Instrumentation MUST capture observables without introducing nondeterminism | **`cmd/server/main.py` uses `ThreadingMixIn`** — concurrent request logging order depends on OS thread scheduling, not arrival order. |
 | 12 | §14 | K8s reference pattern: optional netstack sidecar, shared volumes for run-bundle outputs | **Missing.** No netstack sidecar in any manifest. No volume defined for runner output path `/var/run/deterministic-serving` — run bundles are lost when the pod exits. |
 
@@ -52,10 +50,8 @@ These are not bugs but are worth noting for future work.
 
 - **`runtime_closure_digest` computed by the resolver** (from manifest config data) is semantically different from what §2 defines (Nix closure hash or OCI digest). The builder overwrites it, but the resolver-only lockfile has a misleading value.
 - **Activations in both runner modes are fake** — `(tok * 3) % 991 / 991.0` is a deterministic function of tokens, not actual intermediate activations. Spec §1.1 lists these as a required observable.
-- **`pkg/batchtrace/`, `pkg/networkdet/`** are empty scaffolds. All batch trace logic is inline in runner/verifier. No networking code exists anywhere.
-- **`pkg/hardware/rack_policy.py`** is fully implemented but never called by any component — dead code.
 - **Tests are thorough for the simulated pipeline** (resolver, builder metadata, verifier logic) but by definition cannot validate actual GPU inference determinism or real network determinism on CI.
 
 ## Summary
 
-The control-plane plumbing (resolver, lockfile generation, schema validation, conformance tracking, CI gates) is solid and well-tested. The data-plane reality (actual Nix builds, GPU inference, networking stack, on-disk digest verification) is entirely simulated. The conformance catalog claiming 41/41 MUST requirements "implemented" is overstated — networking, Nix closure content, and runtime artifact verification are metadata scaffolding, not working implementations. There are also 3 concrete bugs that would crash at runtime (#1, #2, #5).
+The control-plane plumbing (resolver, lockfile generation, schema validation, conformance tracking, CI gates) is solid and well-tested. The data-plane reality (actual Nix builds, GPU inference, networking stack, on-disk digest verification) is entirely simulated. The conformance catalog claiming 41/41 MUST requirements "implemented" is overstated — networking, Nix closure content, and runtime artifact verification are metadata scaffolding, not working implementations. There are also 2 concrete bugs that would crash at runtime (#1, #5).

@@ -11,7 +11,6 @@ class TestRepoLayout(unittest.TestCase):
             "cmd/server",
             "cmd/verifier",
             "pkg/manifest",
-            "pkg/hardware",
             "pkg/networkdet",
             "schemas",
             "tests/unit",

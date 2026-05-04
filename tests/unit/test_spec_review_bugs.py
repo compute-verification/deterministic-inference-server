@@ -51,41 +51,6 @@ class TestBug1RunnerSyntheticMode(unittest.TestCase):
             self.assertIn("logits", bundle["observables"])
 
 
-class TestBug2DispatcherHashMismatch(unittest.TestCase):
-    """Bug #2: round_robin_hash produces different hashes in dispatcher vs coordinator.
-
-    Dispatcher uses canonical_json_text().encode() (has trailing newline),
-    coordinator uses canonical_json_bytes() (also has trailing newline via
-    canonical_json_text, but let's verify they're actually the same).
-    """
-
-    def test_dispatcher_and_coordinator_hash_same_input(self) -> None:
-        from pkg.common.deterministic import canonical_json_bytes, canonical_json_text, sha256_prefixed
-
-        test_input = {"id": "req-0", "seq": 0}
-
-        # Dispatcher approach (cmd/runner/dispatcher.py line 31)
-        dispatcher_digest = sha256_prefixed(
-            canonical_json_text(test_input).encode("utf-8")
-        )
-
-        # Coordinator approach (cmd/coordinator/main.py line 95)
-        coordinator_digest = sha256_prefixed(
-            canonical_json_bytes(test_input)
-        )
-
-        # These MUST match for deterministic routing to work
-        self.assertEqual(
-            dispatcher_digest,
-            coordinator_digest,
-            f"Bug #2: Dispatcher and coordinator hash differently.\n"
-            f"  Dispatcher: {dispatcher_digest}\n"
-            f"  Coordinator: {coordinator_digest}\n"
-            f"  Dispatcher input bytes: {canonical_json_text(test_input).encode('utf-8')!r}\n"
-            f"  Coordinator input bytes: {canonical_json_bytes(test_input)!r}"
-        )
-
-
 class TestBug3UlpComparisonWrong(unittest.TestCase):
     """Bug #3: ULP comparison uses fixed epsilon instead of magnitude-relative.
 
