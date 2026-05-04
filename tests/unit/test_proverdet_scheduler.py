@@ -64,6 +64,13 @@ class _FakeClient:
             },
         )
 
+    def get_attestation(self, attestation_id: str) -> dict | None:
+        # The fake never stores real attestations; verify_evidence will
+        # observe `None` and surface a "Freivalds: attestation ... not
+        # found" reason. The scheduler tests only care that the verdict
+        # transcript entry gets emitted, not whether it passes.
+        return None
+
 
 class _FakeClock:
     """Monotonic clock + sleep that records calls and advances itself."""

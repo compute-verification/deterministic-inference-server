@@ -19,7 +19,11 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from pkg.common.deterministic import canonical_json_text
+from pkg.freivalds.backends.stdlib import StdlibBackend
+from pkg.proverdet.replay import FreivaldsBackend
+from pkg.proverdet.replay_verify import verify_evidence
 from pkg.proverdet.transcript import TranscriptLog
+from pkg.proverdet.wire import ReplayEvidence, ReplayRequest
 
 
 class ProverClient(Protocol):
@@ -27,6 +31,7 @@ class ProverClient(Protocol):
     def post_replay(
         self, request: dict[str, object]
     ) -> Iterator[tuple[int, dict[str, object]]]: ...
+    def get_attestation(self, attestation_id: str) -> dict[str, object] | None: ...
 
 
 class Clock(Protocol):
@@ -86,6 +91,7 @@ class VerifierScheduler:
         graph_period_ms: int = 1000,
         replay_period_ms: int = 2000,
         clock: Clock | None = None,
+        backend: FreivaldsBackend | None = None,
     ) -> None:
         self.client = client
         self.transcript = transcript
@@ -94,6 +100,10 @@ class VerifierScheduler:
         self.graph_period_ms = graph_period_ms
         self.replay_period_ms = replay_period_ms
         self.clock = clock or WallClock()
+        # The backend is what verify_evidence runs Freivalds with on each
+        # received pow attestation. Stdlib is enough on CPU; tests inject
+        # the same.
+        self.backend: FreivaldsBackend = backend or StdlibBackend()
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self._next_graph_due = 0
@@ -176,12 +186,37 @@ class VerifierScheduler:
         # `kind=pow` chunks land in arrival order. Errors mid-stream are
         # captured as a `kind=error` chunk by the prover; we simply record
         # them like any other.
+        evidence_chunk: dict[str, object] | None = None
         try:
             for status, chunk in stream:
                 chunk_bytes = canonical_json_text(chunk).encode("utf-8")
                 self._record_received("/replay", chunk_bytes, status)
+                if chunk.get("kind") == "evidence":
+                    evidence_chunk = chunk
         except Exception as exc:
             self._record_received("/replay", str(exc).encode("utf-8"), 599)
+            return
+
+        if evidence_chunk is None:
+            return
+        # Verify the evidence and append a verdict transcript entry.
+        try:
+            req = ReplayRequest.model_validate(request)
+            ev_body = {k: v for k, v in evidence_chunk.items() if k != "kind"}
+            ev = ReplayEvidence.model_validate(ev_body)
+        except Exception as exc:
+            self._record_received("/replay/verdict", f"parse error: {exc}".encode(), 599)
+            return
+        verdict = verify_evidence(
+            req,
+            ev,
+            fetch_attestation=self.client.get_attestation,
+            backend=self.backend,
+        )
+        verdict_bytes = canonical_json_text(
+            {"replay_id": ev.replay_id, "passed": verdict.passed, "reasons": verdict.reasons}
+        ).encode("utf-8")
+        self._record_received("/replay/verdict", verdict_bytes, 200 if verdict.passed else 422)
 
 
 # -- HTTP client used in production (verifier server's daemon thread) --
@@ -200,6 +235,21 @@ class HttpProverClient:
         with urllib.request.urlopen(f"{self.base_url}/graph", timeout=self.timeout_s) as r:
             body = r.read()
             return r.status, json.loads(body) if body else {}
+
+    def get_attestation(self, attestation_id: str) -> dict[str, object] | None:
+        import urllib.error
+        import urllib.request
+
+        try:
+            with urllib.request.urlopen(
+                f"{self.base_url}/attestation/{attestation_id}", timeout=self.timeout_s
+            ) as r:
+                body = r.read()
+                return json.loads(body) if body else {}
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                return None
+            raise
 
     def post_replay(self, request: dict[str, object]) -> Iterator[tuple[int, dict[str, object]]]:
         """Stream the prover's NDJSON /replay response chunk by chunk."""

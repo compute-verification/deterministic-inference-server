@@ -138,6 +138,14 @@ class TestSchedulerAgainstRealProver(unittest.TestCase):
         for e in graph_recv + replay_recv:
             self.assertEqual(e["status_code"], 200)
 
+        # Phase 6.4 DoD: at least one replay verdict landed and it was pass.
+        verdicts = [e for e in entries if e["endpoint"] == "/replay/verdict"]
+        self.assertGreaterEqual(len(verdicts), 1, "no /replay/verdict entries recorded")
+        for v in verdicts:
+            self.assertEqual(
+                v["status_code"], 200, f"verdict not pass: {v}"
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
