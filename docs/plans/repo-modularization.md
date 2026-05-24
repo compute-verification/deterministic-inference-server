@@ -141,6 +141,15 @@ per-module README examples that actually execute; expand the recipe book (e.g.
 deterministic multi-node serving, memory-wipe-before-serve, audit/replay); add a
 `tests/modules/` smoke suite per capability.
 
+**Phase 2.5 — Asset ownership (hybrid co-location). DONE (2026-05-24).** Every repo
+asset gets a designated owning module or "shared core" (the *Asset ownership* table in
+`modules/README.md`). The cheap, data-only single-owner asset moves into its module dir
+(`lockfiles/` → `modules/build/`); assets that are shared, deeply-coupled, Nix-pinned, or
+carry repo-root path assumptions (`schemas/`, `pkg/`, `cmd/`, `flake.nix`, `manifests/`,
+`deploy/`) stay in place with a recorded owner. (`deploy/`'s scripts compute `REPO_ROOT`
+relative to their own location, so moving it would break them — kept designated at root,
+caught by the adversarial review.) Goal: no orphans, no dangling references.
+
 **Phase 3 — Optional physical consolidation.** If the team wants `pkg/` physically under
 `modules/`, do it once the facade API has stabilized (cheap because facades absorb the move).
 
@@ -177,3 +186,16 @@ Edit:
   without reading source.
 - A determinism workflow is a single readable file a colleague can run.
 - Existing `pkg/`/`cmd/` tests stay green (no moves in PR1).
+
+## 8. Definition of done — adversarial validation (process)
+
+**Before any task in this plan is marked done, it must pass an adversarial subagent
+review.** Spawn a *fresh* subagent whose job is to **break** the task — find what's
+missing, wrong, untested, inconsistent, or left dangling, and explicitly try to
+disprove that the task is complete (not to confirm it). Give it the task's intent and
+the diff/changes; have it return concrete findings with evidence.
+
+Treat the findings as **blocking**: the task is done only once each is fixed or
+explicitly judged out of scope with a reason. This applies to every phase/PR above —
+e.g. for Phase 2.5, the reviewer must confirm no asset is orphaned, no reference is
+left dangling, and the gates/tests still pass.

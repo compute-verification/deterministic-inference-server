@@ -15,7 +15,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 MANIFEST="${MANIFEST:-$REPO_ROOT/manifests/qwen3-30b-moe-pp4-multinode.manifest.json}"
 TP_MANIFEST="${TP_MANIFEST:-$REPO_ROOT/manifests/qwen3-30b-moe-tp4-multinode.manifest.json}"
-LOCKFILE="${LOCKFILE:-$REPO_ROOT/lockfiles/qwen3-30b-moe.lockfile.json}"
+LOCKFILE="${LOCKFILE:-$REPO_ROOT/modules/build/lockfiles/qwen3-30b-moe.lockfile.json}"
 OUT_DIR="${OUT_DIR:-$REPO_ROOT/experiments/multinode-determinism/runs-$(date +%Y%m%d)}"
 SKIP_TP="${SKIP_TP:-0}"
 

@@ -28,8 +28,9 @@ pipe.lockfile["runtime_closure_digest"]   # sha256:...
 the Nix store. The OCI image pre-sets `VLLM_BATCH_INVARIANT=1`,
 `CUBLAS_WORKSPACE_CONFIG=:4096:8`, `PYTHONHASHSEED=0`.
 
-**Underlying code.** `flake.nix`, `cmd/builder/main.py`, `lockfiles/`,
-`native/libnetdet/` (built via `make build-libnetdet`).
+**Underlying code.** `lockfiles/` (co-located in this module), `flake.nix`,
+`nix/`, `cmd/builder/main.py`. (`flake.nix`/`nix/` stay at the repo root — Nix
+requires the flake at the root.)
 
 **Status.** Production-grade. Python facade in `modules/build/api.py`:
 `build_runtime(lockfile)` runs anywhere (used by `Pipeline.build`);
