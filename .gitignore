@@ -2,6 +2,9 @@
 __pycache__/
 *.py[cod]
 
+# uv / virtualenv (uv.lock IS committed; the env is not)
+.venv/
+
 # CI artifacts
 .ci-results/
 

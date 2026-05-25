@@ -12,11 +12,11 @@ no prose, no bespoke bash.
 
 ## Setup
 
-The synthetic path needs only two small packages (no GPU):
+The synthetic path needs only a few small pure-Python packages (no GPU),
+pinned in `uv.lock`:
 
 ```bash
-uv venv
-uv pip install -r requirements.txt
+uv sync
 .venv/bin/python3 workflows/verified_inference.py     # -> conformant
 ```
 

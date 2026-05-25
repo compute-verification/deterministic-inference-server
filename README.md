@@ -86,7 +86,7 @@ Install the small CPU-only deps, then run the artifact spine on the synthetic
 backend (no model download, no network):
 
 ```bash
-uv venv && uv pip install -r requirements.txt
+uv sync   # installs the pinned CPU/test deps from uv.lock
 
 tmp=$(mktemp -d)
 .venv/bin/python3 modules/inference/resolver/main.py --manifest modules/inference/manifests/qwen3-1.7b.manifest.json \

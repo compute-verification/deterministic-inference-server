@@ -1,0 +1,26 @@
+[project]
+name = "deterministic-serving-stack"
+version = "0.1.0"
+description = "Bitwise-deterministic LLM inference — CPU/test dependency set."
+requires-python = ">=3.10"
+# Core runtime deps for the CPU path, the Pipeline, the resolver/builder, and the
+# CI gates. torch + vLLM are intentionally NOT here: they are CUDA-specific
+# (cu128 wheels, GPU-only) and provisioned separately on an NVIDIA box by
+# scripts/demo.sh. The real GPU-runtime pin is the Nix closure, not pip.
+dependencies = [
+    "pydantic",
+    "jsonschema",
+]
+
+# Dev/test deps (installed by default with `uv sync`): property-based tests and
+# the plotting scripts the suite subprocesses.
+[dependency-groups]
+dev = [
+    "hypothesis",
+    "matplotlib",
+]
+
+# This repo is an application (modules/ + workflows/), not a pip-installable
+# package — uv manages the environment but does not try to build/install it.
+[tool.uv]
+package = false
