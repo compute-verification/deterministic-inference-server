@@ -20,6 +20,15 @@ dev = [
     "matplotlib",
     "ruff",
 ]
+# Training-side deps for workflows/deterministic_lora_training.py.
+# CUDA-bound (transformers + peft + the underlying torch wheels are provisioned
+# by scripts/demo.sh on the GPU box), so they're NOT pulled in by default
+# `uv sync`. Install with: uv sync --group training (or `uv pip install`
+# directly on the GPU host).
+training = [
+    "transformers",
+    "peft",
+]
 
 # This repo is an application (modules/ + workflows/), not a pip-installable
 # package — uv manages the environment but does not try to build/install it.
