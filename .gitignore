@@ -7,6 +7,7 @@ __pycache__/
 
 # CI artifacts
 .ci-results/
+scripts/ci/d6_artifacts/
 
 # Editor temp files
 *.swp

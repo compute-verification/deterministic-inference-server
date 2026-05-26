@@ -4,7 +4,7 @@ The wire format pairs a small JSON envelope (this module's `to_dict`/`from_dict`
 with a binary payload per matmul (the bytes of `C`). The JSON envelope is
 canonicalised with `modules.core.common.deterministic.canonical_json_text`; the bytes are
 referenced by index and digested separately. See
-``experiments/freivalds-attestation/plan.md`` §Protocol.
+``experiments/freivalds-attestation/plan.md`` (on the `experiments` branch) §Protocol.
 """
 from __future__ import annotations
 
@@ -133,7 +133,7 @@ class Challenge:
     mode and returns full ``C`` bytes (Freivalds verifier path). When set to
     a smaller value, the prover runs in streaming mode and returns one
     chain-hash per chunk of ``M`` consecutive matmuls — see
-    ``experiments/freivalds-attestation/specs/streaming_strided.md``.
+    ``experiments/freivalds-attestation/specs/streaming_strided.md`` (on the `experiments` branch).
     """
     challenge_id: str
     matmuls: tuple[MatmulSpec, ...]

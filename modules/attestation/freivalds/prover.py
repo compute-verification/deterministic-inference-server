@@ -1,7 +1,7 @@
 """Prover side: execute a :class:`Challenge` and emit a :class:`Response`.
 
 Honest prover. Adversarial behaviours (cached / zero / random / dropped)
-live as separate hooks in ``experiments/freivalds-attestation/scripts/``.
+live as separate hooks in ``experiments/freivalds-attestation/scripts/`` (on the `experiments` branch).
 """
 from __future__ import annotations
 

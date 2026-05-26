@@ -5,7 +5,7 @@ verifier picks ``K`` total matmuls and a stride ``M < K``; the prover hashes
 the per-matmul ``digest_c`` of every batch of ``M`` consecutive matmuls into
 one chain hash and reports it. The protocol bounds how much external help
 the prover can fetch — see
-``experiments/freivalds-attestation/specs/streaming_strided.md``.
+``experiments/freivalds-attestation/specs/streaming_strided.md`` (on the `experiments` branch).
 
 This module implements the prover and verifier sides of the chain-hash
 construction. It deliberately reuses the existing per-matmul kernels and

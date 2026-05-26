@@ -3,7 +3,7 @@
 A verifier issues randomized matmul challenges; a prover executes them on
 GPU and returns the results; the verifier checks correctness in O(n^2)
 per matmul via Freivalds' algorithm. See
-``experiments/freivalds-attestation/plan.md`` for the design.
+``experiments/freivalds-attestation/plan.md`` (on the `experiments` branch) for the design.
 
 Public API:
 
