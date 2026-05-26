@@ -41,7 +41,7 @@ pip install -q "vllm==0.17.1" pydantic jsonschema requests huggingface_hub pyyam
 python3 -c "import vllm, torch; print(f'vllm={vllm.__version__} torch={torch.__version__} cuda={torch.cuda.is_available()} gpu={torch.cuda.get_device_name(0) if torch.cuda.is_available() else \"—\"}')"
 
 log "resolve manifest and build lockfile"
-MANIFEST="$REPO_ROOT/experiments/e2e-audit/scripts/smoke.manifest.json"
+MANIFEST="$REPO_ROOT/demos/e2e-audit/scripts/smoke.manifest.json"
 rm -rf "$RUN_DIR"; mkdir -p "$RUN_DIR"
 export PYTHONPATH="$REPO_ROOT:${PYTHONPATH:-}"
 
@@ -99,7 +99,7 @@ print('batch_invariance:', ac.get('batch_invariance'))
 "
 
 log "run audit replay"
-python3 experiments/e2e-audit/scripts/vast_audit_replay.py --server http://localhost:8000
+python3 demos/e2e-audit/scripts/vast_audit_replay.py --server http://localhost:8000
 RC=$?
 if [ "$KEEP" = "true" ]; then
   echo "server still running at http://localhost:8000 (pid=$SERVER_PID)"
