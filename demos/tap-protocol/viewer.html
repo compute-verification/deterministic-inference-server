@@ -1,0 +1,592 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>tap-protocol — protocol viewer</title>
+<style>
+  :root {
+    --bg: #fafafa; --panel: #fff; --border: #ddd; --text: #222; --muted: #666;
+    --link: #2a7ae2; --ok: #1e6b35; --ok-bg: #e3f5e8; --ok-border: #b3dfc2;
+    --bad: #92260f; --bad-bg: #fbe7e3; --bad-border: #f0c1b8;
+    --warm: #b76b00; --warm-bg: #fff4dc; --warm-border: #f0d6a0;
+    --line: #999; --line-active: #2a7ae2; --line-alarm: #c0392b;
+    --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, system-ui, sans-serif; margin: 0; padding: 1rem 1.5rem; background: var(--bg); color: var(--text); }
+  h1 { margin: 0 0 0.25rem; font-size: 1.2rem; font-weight: 600; }
+  .sub { color: var(--muted); margin-bottom: 1rem; font-size: 0.85rem; }
+  .sub code { font-family: var(--mono); background: #f0f0f0; padding: 0.05rem 0.3rem; border-radius: 3px; font-size: 0.85em; }
+
+  .toolbar { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 0.6rem 0.9rem; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+  .toolbar button { font: inherit; padding: 0.3rem 0.75rem; border: 1px solid var(--border); background: white; border-radius: 4px; cursor: pointer; }
+  .toolbar button:hover { background: #f3f3f3; }
+  .toolbar button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .toolbar button.primary { background: var(--link); color: white; border-color: var(--link); }
+  .toolbar button.primary:hover { background: #1f5db0; }
+  .toolbar label { font-size: 0.85rem; color: var(--muted); }
+  .toolbar select, .toolbar input[type=file] { font: inherit; }
+  .toolbar .clock { font-family: var(--mono); font-size: 0.85rem; color: var(--muted); margin-left: auto; }
+  .toolbar .live { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 12px; font-size: 0.75rem; font-weight: 600; background: #f0f0f0; color: var(--muted); }
+  .toolbar .live.on { background: var(--ok-bg); color: var(--ok); }
+
+  .layout { display: grid; grid-template-columns: 1fr 320px; gap: 1rem; }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 1rem; }
+  .panel h2 { margin: 0 0 0.75rem; font-size: 0.95rem; font-weight: 600; color: #333; }
+
+  /* topology */
+  #topology { position: relative; height: 360px; }
+  #topology svg { width: 100%; height: 100%; overflow: visible; }
+  .node-box { fill: white; stroke: var(--border); stroke-width: 1.5; }
+  .node-box.active { stroke: var(--link); stroke-width: 2.5; filter: drop-shadow(0 0 8px rgba(42, 122, 226, 0.35)); }
+  .node-label { font-family: -apple-system, system-ui, sans-serif; font-size: 13px; font-weight: 600; fill: var(--text); text-anchor: middle; }
+  .node-sub { font-family: var(--mono); font-size: 10px; fill: var(--muted); text-anchor: middle; }
+  .node-tag { font-family: var(--mono); font-size: 9px; fill: var(--muted); text-anchor: middle; }
+  .edge { stroke: var(--line); stroke-width: 1.5; fill: none; }
+  .edge-label { font-family: var(--mono); font-size: 10px; fill: var(--muted); text-anchor: middle; }
+  .packet { fill: var(--link); }
+  .packet.alarm { fill: var(--line-alarm); }
+  .arrowhead { fill: var(--line); }
+
+  /* request log */
+  #log table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+  #log th { text-align: left; font-weight: 600; color: var(--muted); padding: 0.35rem 0.5rem; border-bottom: 1px solid var(--border); }
+  #log td { padding: 0.35rem 0.5rem; border-bottom: 1px solid #f0f0f0; vertical-align: top; }
+  #log tr.alarm { background: #fff5f3; }
+  #log tr.pending { background: #fffbf0; }
+  #log .prompt, #log .digest { font-family: var(--mono); font-size: 0.78rem; }
+  #log .digest { color: var(--muted); }
+  #log .pill { display: inline-block; padding: 0.05rem 0.5rem; border-radius: 10px; font-size: 0.7rem; font-weight: 600; }
+  #log .pill.ok { background: var(--ok-bg); color: var(--ok); border: 1px solid var(--ok-border); }
+  #log .pill.bad { background: var(--bad-bg); color: var(--bad); border: 1px solid var(--bad-border); }
+  #log .pill.pending { background: var(--warm-bg); color: var(--warm); border: 1px solid var(--warm-border); }
+
+  /* stats */
+  .stats .stat { display: flex; justify-content: space-between; padding: 0.35rem 0; border-bottom: 1px solid #f0f0f0; font-size: 0.85rem; }
+  .stats .stat:last-child { border-bottom: none; }
+  .stats .stat .v { font-family: var(--mono); font-weight: 600; }
+  .stats .stat .v.ok { color: var(--ok); }
+  .stats .stat .v.bad { color: var(--bad); }
+  .stats h2 { margin-top: 0; }
+
+  /* event tail */
+  #event-tail { background: #f8f8f8; border: 1px solid #eee; border-radius: 4px; padding: 0.5rem; font-family: var(--mono); font-size: 0.72rem; color: #555; height: 110px; overflow: auto; }
+  #event-tail .line { margin: 0; line-height: 1.35; }
+  #event-tail .line .t { color: #999; }
+  #event-tail .line .type { color: var(--link); }
+
+  details summary { cursor: pointer; font-size: 0.85rem; color: var(--muted); padding: 0.3rem 0; }
+  pre.schema { font-family: var(--mono); font-size: 0.72rem; background: #f6f6f6; padding: 0.6rem 0.8rem; border-radius: 4px; overflow: auto; line-height: 1.4; }
+</style>
+</head>
+<body>
+<h1>tap-protocol — protocol viewer</h1>
+<div class="sub">
+  Animates the 4-server inference verification flow. Decoupled from the demo:
+  feed it any JSON event stream matching the schema below, or use the embedded
+  samples. Press <code>?</code> to toggle this hint.
+</div>
+
+<div class="toolbar">
+  <button id="play" class="primary">▶ Play</button>
+  <button id="step">▶| Step</button>
+  <button id="reset">↺ Reset</button>
+  <label>Speed
+    <select id="speed">
+      <option value="1">1×</option>
+      <option value="2">2×</option>
+      <option value="5" selected>5×</option>
+      <option value="10">10×</option>
+      <option value="instant">instant</option>
+    </select>
+  </label>
+  <label>Sample
+    <select id="sample">
+      <option value="happy">3 happy requests</option>
+      <option value="mixed">3 happy + 1 alarm</option>
+      <option value="alarm-only">1 alarm</option>
+    </select>
+  </label>
+  <label>Or load file
+    <input id="file" type="file" accept="application/json">
+  </label>
+  <span id="live-indicator" class="live">offline</span>
+  <span class="clock" id="clock">t = 0.00 s</span>
+</div>
+
+<div class="layout">
+  <div>
+    <div class="panel" id="topology-panel">
+      <h2>Topology</h2>
+      <div id="topology">
+        <svg viewBox="0 0 800 320" preserveAspectRatio="xMidYMid meet">
+          <!-- arrowhead marker -->
+          <defs>
+            <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" class="arrowhead"/>
+            </marker>
+          </defs>
+          <!-- nodes -->
+          <g id="node-client" transform="translate(70 60)">
+            <rect class="node-box" x="0" y="0" width="120" height="64" rx="6"/>
+            <text class="node-label" x="60" y="26">Client</text>
+            <text class="node-sub" x="60" y="44">your laptop</text>
+          </g>
+          <g id="node-gateway" transform="translate(250 60)">
+            <rect class="node-box" x="0" y="0" width="120" height="64" rx="6"/>
+            <text class="node-label" x="60" y="22">Gateway</text>
+            <text class="node-sub" x="60" y="38">:8000</text>
+            <text class="node-tag" x="60" y="54">signs request</text>
+          </g>
+          <g id="node-tap" transform="translate(430 60)">
+            <rect class="node-box" x="0" y="0" width="120" height="64" rx="6"/>
+            <text class="node-label" x="60" y="22">Tap</text>
+            <text class="node-sub" x="60" y="38">:8010</text>
+            <text class="node-tag" x="60" y="54">relay + async copy</text>
+          </g>
+          <g id="node-host" transform="translate(620 20)">
+            <rect class="node-box" x="0" y="0" width="140" height="76" rx="6"/>
+            <text class="node-label" x="70" y="22">Host Cluster</text>
+            <text class="node-sub" x="70" y="38">:8020 → vLLM</text>
+            <text class="node-tag" x="70" y="56">Qwen3-1.7B</text>
+            <text class="node-tag" x="70" y="68">c3 deterministic</text>
+          </g>
+          <g id="node-recomp" transform="translate(620 200)">
+            <rect class="node-box" x="0" y="0" width="140" height="76" rx="6"/>
+            <text class="node-label" x="70" y="22">Recomp Cluster</text>
+            <text class="node-sub" x="70" y="38">:8030 → vLLM</text>
+            <text class="node-tag" x="70" y="56">re-infers + compares</text>
+            <text class="node-tag" x="70" y="68">alarm.jsonl on mismatch</text>
+          </g>
+
+          <!-- edges (drawn behind packets) -->
+          <line class="edge" id="edge-client-gateway" x1="190" y1="92" x2="250" y2="92" marker-end="url(#ah)"/>
+          <line class="edge" id="edge-gateway-tap" x1="370" y1="92" x2="430" y2="92" marker-end="url(#ah)"/>
+          <line class="edge" id="edge-tap-host" x1="550" y1="80" x2="620" y2="58" marker-end="url(#ah)"/>
+          <line class="edge" id="edge-host-tap" x1="620" y1="68" x2="550" y2="100" marker-end="url(#ah)"/>
+          <line class="edge" id="edge-tap-gateway" x1="430" y1="104" x2="370" y2="104" marker-end="url(#ah)"/>
+          <line class="edge" id="edge-gateway-client" x1="250" y1="104" x2="190" y2="104" marker-end="url(#ah)"/>
+          <line class="edge" id="edge-tap-recomp" x1="550" y1="116" x2="620" y2="216" stroke-dasharray="4 3" marker-end="url(#ah)"/>
+
+          <!-- edge labels -->
+          <text class="edge-label" x="220" y="86">prompt</text>
+          <text class="edge-label" x="400" y="86">signed req</text>
+          <text class="edge-label" x="592" y="58">signed req</text>
+          <text class="edge-label" x="592" y="122">signed resp</text>
+          <text class="edge-label" x="400" y="118">signed resp</text>
+          <text class="edge-label" x="220" y="118">output</text>
+          <text class="edge-label" x="600" y="172" transform="rotate(0)">async copy</text>
+
+          <!-- packet group: appended dynamically -->
+          <g id="packets"></g>
+        </svg>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top: 1rem;" id="log">
+      <h2>Requests</h2>
+      <table id="log-table">
+        <thead>
+          <tr>
+            <th style="width:3rem;">id</th>
+            <th>prompt</th>
+            <th>output (preview)</th>
+            <th style="width:11rem;">host digest</th>
+            <th style="width:7rem;">verify</th>
+          </tr>
+        </thead>
+        <tbody id="log-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div>
+    <div class="panel stats" id="stats">
+      <h2>Stats</h2>
+      <div class="stat"><span>requests</span><span class="v" id="s-total">0</span></div>
+      <div class="stat"><span>in flight</span><span class="v" id="s-inflight">0</span></div>
+      <div class="stat"><span>verified</span><span class="v ok" id="s-verified">0</span></div>
+      <div class="stat"><span>alarms</span><span class="v bad" id="s-alarms">0</span></div>
+      <div class="stat"><span>avg gateway → response</span><span class="v" id="s-latency">— s</span></div>
+      <div class="stat"><span>avg verify lag</span><span class="v" id="s-verify-lag">— s</span></div>
+    </div>
+
+    <div class="panel" style="margin-top: 1rem;">
+      <h2>Event tail</h2>
+      <div id="event-tail"></div>
+    </div>
+
+    <div class="panel" style="margin-top: 1rem;">
+      <details>
+        <summary>Event schema</summary>
+        <pre class="schema">Each event: {ts, type, id, ...payload}
+
+ts:    seconds since stream start
+id:    monotonic request id (matches SignedEnvelope.data.id)
+type:
+  request_sent             client → gateway (plain prompt)
+  gateway_signed           gateway computed HMAC; payload: signature_prefix
+  tap_received             gateway → tap (signed envelope)
+  tap_relayed_request      tap → host (relay)
+  host_completed           host returned; payload: output_preview,
+                           output_sha256, tokens
+  tap_relayed_response     host → tap → gateway (signed envelope)
+  client_received          gateway → client (plain output)
+  tap_verify_started       tap → recomp (async copy)
+  recomp_verified          recomp returned; payload: is_verified,
+                           expected_sha256, actual_sha256, reason?
+
+Mode toggle:
+  ?mode=live&url=...  poll Tap's /events SSE endpoint
+  (default)           replay embedded sample or uploaded file</pre>
+      </details>
+    </div>
+  </div>
+</div>
+
+<script>
+// ---------------------------------------------------------------------
+// Embedded samples (kept compact; happy + alarm + mixed)
+// ---------------------------------------------------------------------
+const SAMPLES = {};
+
+function mkHappy(id, t0, prompt, out, digest, lat=5.2, vlag=4.1) {
+  return [
+    {ts: t0+0.00, type: "request_sent",          id, prompt},
+    {ts: t0+0.01, type: "gateway_signed",        id, signature_prefix: "f3a1c7"},
+    {ts: t0+0.02, type: "tap_received",          id},
+    {ts: t0+0.03, type: "tap_relayed_request",   id},
+    {ts: t0+lat-0.05, type: "host_completed",    id, output_preview: out, output_sha256: digest, tokens: 24},
+    {ts: t0+lat-0.04, type: "tap_relayed_response", id},
+    {ts: t0+lat,      type: "client_received",   id, output_preview: out},
+    {ts: t0+lat+0.01, type: "tap_verify_started", id},
+    {ts: t0+lat+vlag, type: "recomp_verified",   id, is_verified: true,
+     expected_sha256: digest, actual_sha256: digest},
+  ];
+}
+function mkAlarm(id, t0, prompt, out, host_digest, recomp_digest, lat=5.2, vlag=4.3) {
+  return [
+    {ts: t0+0.00, type: "request_sent",          id, prompt},
+    {ts: t0+0.01, type: "gateway_signed",        id, signature_prefix: "f3a1c7"},
+    {ts: t0+0.02, type: "tap_received",          id},
+    {ts: t0+0.03, type: "tap_relayed_request",   id},
+    {ts: t0+lat-0.05, type: "host_completed",    id, output_preview: out, output_sha256: host_digest, tokens: 28},
+    {ts: t0+lat-0.04, type: "tap_relayed_response", id},
+    {ts: t0+lat,      type: "client_received",   id, output_preview: out},
+    {ts: t0+lat+0.01, type: "tap_verify_started", id},
+    {ts: t0+lat+vlag, type: "recomp_verified",   id, is_verified: false,
+     expected_sha256: host_digest, actual_sha256: recomp_digest, reason: "output_mismatch"},
+  ];
+}
+
+SAMPLES.happy = [
+  ...mkHappy(1, 0.0, "The capital of France is", "<think>The user is asking about the capital of France. Paris.", "sha256:a1b2c3d4e5f6"),
+  ...mkHappy(2, 11.0, "What is 2+2?", "<think>Simple arithmetic. 2+2 = 4.", "sha256:9f8e7d6c5b4a", 4.8),
+  ...mkHappy(3, 22.5, "Name a primary color.", "<think>Red, blue, or yellow are primary colors.", "sha256:11223344aabb", 5.1),
+];
+SAMPLES["alarm-only"] = [
+  ...mkAlarm(1, 0.0, "Write hello world in Python.",
+             "<think>print('hello world')",
+             "sha256:7a8b9c0d1e2f",
+             "sha256:deadbeefcafe"),
+];
+SAMPLES.mixed = [
+  ...mkHappy(1, 0.0,  "The capital of France is", "<think>Paris is the capital.", "sha256:a1b2c3d4e5f6"),
+  ...mkHappy(2, 11.0, "What is 2+2?", "<think>2+2 = 4.", "sha256:9f8e7d6c5b4a", 4.8),
+  ...mkAlarm(3, 22.0, "Write a poem about determinism.",
+             "<think>Deterministic seas...",
+             "sha256:1122aabbccdd",
+             "sha256:badbadbad000", 5.4),
+  ...mkHappy(4, 33.0, "What year is it?", "<think>I don't have realtime info.", "sha256:33445566eeff", 5.0),
+];
+
+// ---------------------------------------------------------------------
+// State
+// ---------------------------------------------------------------------
+const state = {
+  events: [],           // sorted by ts
+  cursor: 0,            // next event index
+  t: 0,                 // virtual seconds
+  startedAtReal: 0,     // performance.now() when play started
+  startedAtVirt: 0,     // virtual t when play started
+  speed: 5,             // x; "instant" handled specially
+  playing: false,
+  raf: null,
+  byId: new Map(),      // id -> {prompt, out, host_digest, status, t_request, t_response, t_verify}
+  alarms: 0,
+  live: false,
+  liveSrc: null,
+};
+
+// ---------------------------------------------------------------------
+// DOM refs
+// ---------------------------------------------------------------------
+const $ = (id) => document.getElementById(id);
+const btnPlay = $("play"); const btnStep = $("step"); const btnReset = $("reset");
+const selSpeed = $("speed"); const selSample = $("sample"); const inFile = $("file");
+const clock = $("clock"); const liveIndicator = $("live-indicator");
+const logBody = $("log-body"); const eventTail = $("event-tail");
+
+// ---------------------------------------------------------------------
+// Topology helpers
+// ---------------------------------------------------------------------
+const NODE_CENTERS = {
+  client:  {x: 130, y: 92},
+  gateway: {x: 310, y: 92},
+  tap:     {x: 490, y: 92},
+  host:    {x: 690, y: 58},
+  recomp:  {x: 690, y: 238},
+};
+const PACKETS = $("packets");
+
+function flashNode(name, durationMs=900) {
+  const el = document.getElementById("node-" + name);
+  if (!el) return;
+  el.querySelector(".node-box").classList.add("active");
+  setTimeout(() => el.querySelector(".node-box").classList.remove("active"), durationMs);
+}
+
+function flyPacket(from, to, opts={}) {
+  const a = NODE_CENTERS[from], b = NODE_CENTERS[to];
+  if (!a || !b) return;
+  const ns = "http://www.w3.org/2000/svg";
+  const c = document.createElementNS(ns, "circle");
+  c.setAttribute("class", "packet" + (opts.alarm ? " alarm" : ""));
+  c.setAttribute("cx", a.x); c.setAttribute("cy", a.y);
+  c.setAttribute("r", opts.alarm ? 7 : 5);
+  PACKETS.appendChild(c);
+  const dur = opts.dur ?? (opts.alarm ? 1200 : 700);
+  c.animate(
+    [{cx: a.x, cy: a.y}, {cx: b.x, cy: b.y}],
+    {duration: dur, easing: "cubic-bezier(.4,0,.2,1)", fill: "forwards"}
+  ).addEventListener("finish", () => c.remove());
+  flashNode(from, dur);
+  setTimeout(() => flashNode(to, 600), dur * 0.8);
+}
+
+// ---------------------------------------------------------------------
+// Apply one event
+// ---------------------------------------------------------------------
+function apply(evt) {
+  // event-tail line
+  const li = document.createElement("div");
+  li.className = "line";
+  const payload = {...evt}; delete payload.ts; delete payload.type; delete payload.id;
+  const payloadStr = Object.keys(payload).length ? " " + JSON.stringify(payload) : "";
+  li.innerHTML = `<span class="t">${evt.ts.toFixed(2).padStart(7)}</span> id=${evt.id} <span class="type">${evt.type}</span>${payloadStr ? escapeHtml(payloadStr) : ""}`;
+  eventTail.appendChild(li);
+  eventTail.scrollTop = eventTail.scrollHeight;
+
+  let row = state.byId.get(evt.id);
+  if (!row) {
+    row = {id: evt.id, prompt: "", out: "", host_digest: "", status: "pending", t_request: null, t_response: null, t_verify: null};
+    state.byId.set(evt.id, row);
+  }
+
+  switch (evt.type) {
+    case "request_sent":
+      row.prompt = evt.prompt || "";
+      row.t_request = evt.ts;
+      flyPacket("client", "gateway");
+      upsertRow(row);
+      break;
+    case "gateway_signed":
+      flashNode("gateway");
+      break;
+    case "tap_received":
+      flyPacket("gateway", "tap");
+      break;
+    case "tap_relayed_request":
+      flyPacket("tap", "host");
+      break;
+    case "host_completed":
+      row.out = evt.output_preview || "";
+      row.host_digest = evt.output_sha256 || "";
+      flashNode("host", 1200);
+      upsertRow(row);
+      break;
+    case "tap_relayed_response":
+      flyPacket("host", "tap");
+      break;
+    case "client_received":
+      row.t_response = evt.ts;
+      // tap → gateway → client, animated as two hops
+      flyPacket("tap", "gateway");
+      setTimeout(() => flyPacket("gateway", "client"), 700);
+      upsertRow(row);
+      break;
+    case "tap_verify_started":
+      flyPacket("tap", "recomp", {dur: 1100});
+      break;
+    case "recomp_verified":
+      row.t_verify = evt.ts;
+      row.status = evt.is_verified ? "verified" : "alarm";
+      if (!evt.is_verified) {
+        row.recomp_digest = evt.actual_sha256;
+        row.reason = evt.reason || "mismatch";
+        state.alarms += 1;
+        flashNode("recomp", 1500);
+      } else {
+        flashNode("recomp", 800);
+      }
+      upsertRow(row);
+      break;
+  }
+
+  updateStats();
+}
+
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"})[c]);
+}
+
+function upsertRow(row) {
+  let tr = document.getElementById("row-" + row.id);
+  if (!tr) {
+    tr = document.createElement("tr");
+    tr.id = "row-" + row.id;
+    logBody.appendChild(tr);
+  }
+  tr.className = row.status === "alarm" ? "alarm" : (row.status === "pending" ? "pending" : "");
+  const verifyCell =
+    row.status === "verified" ? `<span class="pill ok">verified</span>` :
+    row.status === "alarm"    ? `<span class="pill bad">alarm</span>`    :
+                                `<span class="pill pending">in flight</span>`;
+  tr.innerHTML = `
+    <td>${row.id}</td>
+    <td class="prompt">${escapeHtml(row.prompt || "")}</td>
+    <td class="prompt">${escapeHtml((row.out || "").slice(0, 70))}${row.out && row.out.length > 70 ? "…" : ""}</td>
+    <td class="digest">${escapeHtml(row.host_digest || "")}</td>
+    <td>${verifyCell}${row.reason ? `<div style="font-size:0.7rem;color:var(--bad);font-family:var(--mono)">${escapeHtml(row.reason)}</div>` : ""}</td>
+  `;
+}
+
+function updateStats() {
+  const all = [...state.byId.values()];
+  $("s-total").textContent = all.length;
+  $("s-inflight").textContent = all.filter(r => r.status === "pending").length;
+  $("s-verified").textContent = all.filter(r => r.status === "verified").length;
+  $("s-alarms").textContent = state.alarms;
+  const lats = all.filter(r => r.t_request != null && r.t_response != null).map(r => r.t_response - r.t_request);
+  const vlags = all.filter(r => r.t_response != null && r.t_verify != null).map(r => r.t_verify - r.t_response);
+  $("s-latency").textContent = lats.length ? (lats.reduce((a,b) => a+b, 0) / lats.length).toFixed(2) + " s" : "— s";
+  $("s-verify-lag").textContent = vlags.length ? (vlags.reduce((a,b) => a+b, 0) / vlags.length).toFixed(2) + " s" : "— s";
+}
+
+// ---------------------------------------------------------------------
+// Player
+// ---------------------------------------------------------------------
+function loadEvents(arr) {
+  state.events = [...arr].sort((a, b) => a.ts - b.ts);
+  state.cursor = 0;
+  state.t = 0;
+  state.startedAtReal = 0;
+  state.byId = new Map();
+  state.alarms = 0;
+  logBody.innerHTML = "";
+  eventTail.innerHTML = "";
+  PACKETS.innerHTML = "";
+  updateStats();
+  clock.textContent = "t = 0.00 s";
+  stop();
+}
+
+function tick(nowMs) {
+  if (!state.playing) return;
+  const speed = selSpeed.value === "instant" ? 100 : Number(selSpeed.value);
+  const elapsed = (nowMs - state.startedAtReal) / 1000;
+  state.t = state.startedAtVirt + elapsed * speed;
+  clock.textContent = `t = ${state.t.toFixed(2)} s`;
+  while (state.cursor < state.events.length && state.events[state.cursor].ts <= state.t) {
+    apply(state.events[state.cursor]);
+    state.cursor++;
+  }
+  if (state.cursor < state.events.length) {
+    state.raf = requestAnimationFrame(tick);
+  } else {
+    state.playing = false;
+    btnPlay.textContent = "▶ Play";
+  }
+}
+
+function play() {
+  if (state.cursor >= state.events.length) {
+    loadEvents(state.events); // reset and replay
+  }
+  state.playing = true;
+  state.startedAtReal = performance.now();
+  state.startedAtVirt = state.t;
+  btnPlay.textContent = "⏸ Pause";
+  state.raf = requestAnimationFrame(tick);
+}
+function stop() {
+  state.playing = false;
+  if (state.raf) cancelAnimationFrame(state.raf);
+  btnPlay.textContent = "▶ Play";
+}
+function step() {
+  if (state.cursor >= state.events.length) return;
+  const next = state.events[state.cursor];
+  state.t = next.ts;
+  clock.textContent = `t = ${state.t.toFixed(2)} s`;
+  apply(next);
+  state.cursor++;
+}
+
+// ---------------------------------------------------------------------
+// Live mode (SSE), populated by query string ?mode=live&url=...
+// ---------------------------------------------------------------------
+function startLive(url) {
+  state.live = true;
+  liveIndicator.textContent = "connecting";
+  liveIndicator.className = "live";
+  loadEvents([]);
+  try {
+    state.liveSrc = new EventSource(url);
+    state.liveSrc.onopen = () => { liveIndicator.textContent = "live"; liveIndicator.className = "live on"; };
+    state.liveSrc.onerror = () => { liveIndicator.textContent = "disconnected"; liveIndicator.className = "live"; };
+    state.liveSrc.onmessage = (msg) => {
+      try {
+        const evt = JSON.parse(msg.data);
+        // In live mode, evt.ts is wall-clock from the server. Convert to
+        // "seconds since first event" for the topology playback.
+        if (state.events.length === 0) state.t0 = evt.ts;
+        evt.ts = evt.ts - (state.t0 || 0);
+        state.events.push(evt);
+        apply(evt);
+      } catch (e) { console.warn("bad live event", e); }
+    };
+  } catch (e) {
+    liveIndicator.textContent = "live: failed";
+    console.error(e);
+  }
+}
+
+// ---------------------------------------------------------------------
+// Wire up controls
+// ---------------------------------------------------------------------
+btnPlay.addEventListener("click", () => state.playing ? stop() : play());
+btnStep.addEventListener("click", () => { stop(); step(); });
+btnReset.addEventListener("click", () => { stop(); loadEvents(SAMPLES[selSample.value]); });
+selSample.addEventListener("change", () => { stop(); loadEvents(SAMPLES[selSample.value]); });
+inFile.addEventListener("change", async () => {
+  if (!inFile.files[0]) return;
+  const text = await inFile.files[0].text();
+  try {
+    const data = JSON.parse(text);
+    const events = Array.isArray(data) ? data : (data.events || []);
+    stop(); loadEvents(events);
+  } catch (e) { alert("Invalid JSON: " + e.message); }
+});
+
+// init
+const params = new URLSearchParams(location.search);
+if (params.get("mode") === "live" && params.get("url")) {
+  startLive(params.get("url"));
+} else {
+  loadEvents(SAMPLES.mixed);
+  selSample.value = "mixed";
+}
+</script>
+</body>
+</html>
