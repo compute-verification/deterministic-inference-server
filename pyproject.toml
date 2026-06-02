@@ -10,6 +10,7 @@ requires-python = ">=3.10"
 dependencies = [
     "pydantic",
     "jsonschema",
+    "cryptography>=48.0.0",
 ]
 
 # Dev/test deps (installed by default with `uv sync`): property-based tests and

@@ -1,0 +1,20 @@
+[workspace]
+members = ["lib", "program", "host"]
+resolver = "2"
+
+[workspace.dependencies]
+serde = { version = "1.0", default-features = false, features = ["derive", "alloc"] }
+proof-server-lib = { path = "lib" }
+
+# SP1 precompile patches. The default `sha2` and `ed25519-dalek` crates
+# implement everything in software, which costs ~800k SP1 cycles per row
+# even on trivial witnesses. The patched versions delegate to the SP1
+# zkVM's SHA-256 and Ed25519 precompiles, dropping per-row cost by ~10x.
+#
+# Tag pattern: patch-<crate>-<version>-sp1-<sp1-version>. These tags are
+# pinned to SP1 6.0.0 (matching sp1-zkvm/sp1-sdk = 6.0.1 below); bump
+# together if the SP1 version changes.
+[patch.crates-io]
+sha2 = { git = "https://github.com/sp1-patches/RustCrypto-hashes", tag = "patch-sha2-0.10.8-sp1-6.0.0" }
+ed25519-dalek = { git = "https://github.com/sp1-patches/curve25519-dalek", tag = "patch-4.1.3-sp1-6.0.0" }
+curve25519-dalek = { git = "https://github.com/sp1-patches/curve25519-dalek", tag = "patch-4.1.3-sp1-6.0.0" }
