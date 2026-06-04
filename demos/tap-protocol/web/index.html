@@ -190,9 +190,19 @@
   .topo-node-group.ok    .topo-icon { stroke: var(--ok); }
   .topo-node-group.bad   .topo-icon { stroke: var(--bad); }
 
-  .topo-packet { fill: var(--accent); filter: drop-shadow(0 0 4px rgba(37, 99, 235, 0.35)); }
-  .topo-packet.ok  { fill: var(--ok);  filter: drop-shadow(0 0 4px rgba(16, 185, 129, 0.35)); }
-  .topo-packet.bad { fill: var(--bad); filter: drop-shadow(0 0 4px rgba(220, 38, 38, 0.35)); }
+  /* Edge pulse — a short bright segment slides along the line in the
+     direction of the arrow when an event fires. Replaces the old
+     packet-circle animation. */
+  .topo-edge-pulse {
+    stroke: var(--accent); stroke-width: 2.6; fill: none;
+    stroke-linecap: round; stroke-dasharray: 14 200;
+    opacity: 0; pointer-events: none;
+    filter: drop-shadow(0 0 4px rgba(37, 99, 235, 0.55));
+    transition: opacity 0.12s ease-out;
+  }
+  .topo-edge-pulse.ok  { stroke: var(--ok); filter: drop-shadow(0 0 4px rgba(4, 120, 87, 0.55)); }
+  .topo-edge-pulse.bad { stroke: var(--bad); filter: drop-shadow(0 0 4px rgba(185, 28, 28, 0.55)); }
+  .topo-edge-pulse.active { opacity: 1; }
 
   /* Runs table */
   .runs-card { background: var(--bg); border: 1px solid var(--rule); border-radius: 12px; box-shadow: var(--shadow-sm); overflow: hidden; }
@@ -428,13 +438,22 @@
       <!-- Async copy to Verifier -->
       <line class="topo-edge async" id="edge-tap-recomp" x1="510" y1="128" x2="660" y2="148" marker-end="url(#ah-async)"/>
 
+      <!-- Pulse overlays: one per edge, hidden by default. JS animates
+           stroke-dashoffset to slide a short bright segment from
+           source to destination in the arrow's direction. -->
+      <line class="topo-edge-pulse" id="edge-pulse-you-gateway" pathLength="100" x1="150" y1="103" x2="200" y2="103"/>
+      <line class="topo-edge-pulse" id="edge-pulse-gateway-tap" pathLength="100" x1="330" y1="103" x2="380" y2="103"/>
+      <line class="topo-edge-pulse" id="edge-pulse-tap-host"    pathLength="100" x1="510" y1="98"  x2="660" y2="78"/>
+      <line class="topo-edge-pulse" id="edge-pulse-host-tap"    pathLength="100" x1="660" y1="86"  x2="510" y2="108"/>
+      <line class="topo-edge-pulse" id="edge-pulse-tap-gateway" pathLength="100" x1="380" y1="121" x2="330" y2="121"/>
+      <line class="topo-edge-pulse" id="edge-pulse-gateway-you" pathLength="100" x1="200" y1="121" x2="150" y2="121"/>
+      <line class="topo-edge-pulse" id="edge-pulse-tap-recomp"  pathLength="100" x1="510" y1="128" x2="660" y2="148"/>
+
       <!-- Edge labels — small, mono, identify what flows. -->
       <text class="topo-edge-label" x="175" y="98">prompt</text>
       <text class="topo-edge-label" x="355" y="98">signed envelope</text>
       <text class="topo-edge-label" x="175" y="135">answer</text>
       <text class="topo-edge-label" x="592" y="135" transform="rotate(8 592 135)">async copy</text>
-
-      <g id="topo-packets"></g>
     </svg>
   </div>
 
@@ -508,18 +527,12 @@ function summarize(s, n = 180) {
 }
 
 // ---------------------------------------------------------------------
-// Topology animation: nodes + flying packets matching the protocol events.
-const TOPO_PACKETS = document.getElementById("topo-packets");
-const NS = "http://www.w3.org/2000/svg";
+// Topology animation: each protocol event triggers a moving "pulse"
+// segment that slides along the arrow's pulse-overlay line in the
+// direction of the arrowhead. Implemented via the Web Animations API
+// on the line's stroke-dashoffset (the line is pathLength="100" so
+// dash math is in normalized units regardless of actual length).
 
-// Geometry — matches the SVG layout (node centers).
-const TOPO = {
-  you:     { x:  90, y: 111 },
-  gateway: { x: 265, y: 111 },
-  tap:     { x: 445, y: 111 },
-  host:    { x: 770, y:  75 },
-  recomp:  { x: 770, y: 147 },
-};
 const EDGE_OF = {
   "you-gateway":     "edge-you-gateway",
   "gateway-tap":     "edge-gateway-tap",
@@ -529,7 +542,6 @@ const EDGE_OF = {
   "gateway-you":     "edge-gateway-you",
   "tap-recomp":      "edge-tap-recomp",
 };
-const TOPO_NODES = ["you", "gateway", "tap", "host", "recomp"];
 
 function flashNode(name, mode = "active", durationMs = 700) {
   const g = document.getElementById("topo-" + name);
@@ -547,22 +559,38 @@ function flashEdge(edgeKey, durationMs = 700) {
   setTimeout(() => el.classList.remove("active"), durationMs);
 }
 
-function flyPacket(from, to, opts = {}) {
-  const a = TOPO[from], b = TOPO[to];
-  if (!a || !b) return;
-  const c = document.createElementNS(NS, "circle");
-  c.setAttribute("class", "topo-packet" + (opts.kind ? " " + opts.kind : ""));
-  c.setAttribute("cx", a.x); c.setAttribute("cy", a.y);
-  c.setAttribute("r", opts.r ?? (opts.kind === "bad" ? 5.5 : 4.5));
-  TOPO_PACKETS.appendChild(c);
+function pulseEdge(from, to, opts = {}) {
+  const key = from + "-" + to;
+  const pulse = document.getElementById("edge-pulse-" + key);
+  if (!pulse) return;
   const dur = opts.dur ?? 650;
-  c.animate(
-    [{ cx: a.x, cy: a.y }, { cx: b.x, cy: b.y }],
-    { duration: dur, easing: "cubic-bezier(.4,0,.2,1)", fill: "forwards" }
-  ).addEventListener("finish", () => c.remove());
-  flashEdge(from + "-" + to, dur);
+  const kind = opts.kind;
+
+  // Apply variant color (ok/bad) before fade-in.
+  pulse.classList.remove("ok", "bad");
+  if (kind === "ok" || kind === "bad") pulse.classList.add(kind);
+
+  // Fade in, animate the dash sliding from source-end to dest-end,
+  // then fade out. The dasharray is "14 200" in CSS — at offset 14 the
+  // segment is fully before the path; at offset -100 it has exited
+  // past the destination.
+  pulse.classList.add("active");
+  const anim = pulse.animate(
+    [
+      { strokeDashoffset: 14 },
+      { strokeDashoffset: -100 },
+    ],
+    { duration: dur, easing: "cubic-bezier(.35, 0, .2, 1)", fill: "forwards" },
+  );
+  anim.addEventListener("finish", () => {
+    pulse.classList.remove("active");
+    // Reset for the next firing; small timeout so the fade-out is visible.
+    setTimeout(() => { pulse.style.strokeDashoffset = ""; pulse.classList.remove("ok", "bad"); }, 180);
+  });
+
+  flashEdge(key, dur);
   flashNode(from, "active", dur);
-  setTimeout(() => flashNode(to, opts.kind ?? "active", 600), dur * 0.8);
+  setTimeout(() => flashNode(to, kind ?? "active", 600), dur * 0.8);
 }
 
 // Build an empty row, prepend it, return the model object
@@ -725,18 +753,18 @@ function startEvents() {
           m = newRow({ id: evt.id, prompt: evt.prompt, ts: evt.ts });
         }
         rows.set(evt.id, m);
-        if (!isReplay) flyPacket("you", "gateway");
+        if (!isReplay) pulseEdge("you", "gateway");
         break;
       case "gateway_signed":
         if (m) setStage(m, "signed");
         if (!isReplay) flashNode("gateway", "active", 500);
         break;
       case "tap_received":
-        if (!isReplay) flyPacket("gateway", "tap");
+        if (!isReplay) pulseEdge("gateway", "tap");
         break;
       case "tap_relayed_request":
         if (m) setStage(m, "sent_to_host");
-        if (!isReplay) flyPacket("tap", "host", { dur: 800 });
+        if (!isReplay) pulseEdge("tap", "host", { dur: 800 });
         break;
       case "host_completed":
         if (m) {
@@ -747,7 +775,7 @@ function startEvents() {
         if (!isReplay) flashNode("host", "active", 1100);
         break;
       case "tap_relayed_response":
-        if (!isReplay) flyPacket("host", "tap", { dur: 700 });
+        if (!isReplay) pulseEdge("host", "tap", { dur: 700 });
         break;
       case "client_received":
         if (m) {
@@ -755,12 +783,12 @@ function startEvents() {
           setStage(m, "returned");
         }
         if (!isReplay) {
-          flyPacket("tap", "gateway");
-          setTimeout(() => flyPacket("gateway", "you"), 650);
+          pulseEdge("tap", "gateway");
+          setTimeout(() => pulseEdge("gateway", "you"), 650);
         }
         break;
       case "tap_verify_started":
-        if (!isReplay) flyPacket("tap", "recomp", { dur: 900 });
+        if (!isReplay) pulseEdge("tap", "recomp", { dur: 900 });
         break;
       case "recomp_verified":
         if (m) {
