@@ -57,6 +57,8 @@ class ModelDims:
 # digest only, so these are filled in from each model's published HF config.
 MODEL_DIMS: dict[str, ModelDims] = {
     "hf://Qwen/Qwen3-1.7B": ModelDims(n_params=1_720_000_000, n_layers=28, d_model=2048),
+    # Spec-decode draft model: same Qwen3 tokenizer family, much smaller.
+    "hf://Qwen/Qwen3-0.6B": ModelDims(n_params=600_000_000, n_layers=28, d_model=1024),
 }
 
 # Used when ``model.source`` is not in the table. Picked so the shapes of the
@@ -369,5 +371,128 @@ def build_training_task_graph(
     return TrainingTaskGraph(
         request_id=request_id,
         model_source=model_source,
+        nodes=nodes,
+    )
+
+
+# ===========================================================================
+# Speculative-decoding task graph: a spine with pruned (rejected) branches.
+# ===========================================================================
+#
+# Speculative decoding pairs a small fast *draft* model with a large *target*
+# model. Each round:
+#   1. the draft model autoregressively proposes K tokens (K thin draft passes),
+#   2. the target model verifies all K in ONE forward pass (one fat pass),
+#   3. it accepts the longest prefix of drafts that match its own greedy choice,
+#      then emits one correction/bonus token. Drafts past the first mismatch are
+#      REJECTED and discarded.
+#
+# So the graph has two firsts vs. the inference/training graphs:
+#   * **pruning** -- rejected drafts are dead-end stubs that never join the spine
+#     (their ``next`` is None and nothing points to them), and
+#   * **two FLOP weight-classes from two models** -- a draft pass (~2*N_draft)
+#     is far cheaper than a verify pass (~2*N_target*(K+1)).
+#
+# The committed spine threads through the accepted drafts and the per-round
+# correction tokens. Greedy spec-decode is output-identical to plain greedy
+# target decoding, so the spine spells out exactly the target's own output.
+
+
+@dataclass
+class SpecNode:
+    id: int
+    kind: str                # "draft" | "verify"
+    model: str               # "draft" | "target"
+    flops: int
+    round: int               # which spec-decode round
+    pos_in_round: int        # draft index 0..K-1; the verify node is K
+    token: str               # proposed token (draft) or correction token (verify)
+    status: str              # draft: "accepted"|"rejected" ; verify: "correction"
+    next: Optional[int]      # committed-spine successor; None if pruned or end
+
+
+@dataclass
+class SpecDecodeTaskGraph:
+    request_id: int
+    draft_model: str
+    target_model: str
+    nodes: list[SpecNode] = field(default_factory=list)
+
+    def to_dict(self) -> dict:
+        return {
+            "request_id": self.request_id,
+            "draft_model": self.draft_model,
+            "target_model": self.target_model,
+            "nodes": [asdict(n) for n in self.nodes],
+        }
+
+    def to_json(self) -> str:
+        return json.dumps(self.to_dict(), sort_keys=True, separators=(",", ":")) + "\n"
+
+
+def build_spec_decode_task_graph(
+    request_id: int,
+    draft_model_source: str,
+    target_model_source: str,
+    prompt_len: int,
+    rounds: list[dict],
+) -> SpecDecodeTaskGraph:
+    """Transform a speculative-decoding run into a spine-with-pruned-branches DAG.
+
+    ``rounds`` is a list of ``{"drafts": [str], "num_accepted": int,
+    "correction": str}`` -- exactly what the spec-decode runner records. Each
+    round contributes K ``draft`` nodes (accepted/rejected) plus one ``verify``
+    node; the committed spine threads the accepted drafts and corrections.
+    """
+    d_dims = dims_for(draft_model_source)
+    t_dims = dims_for(target_model_source)
+
+    nodes: list[SpecNode] = []
+    round_spines: list[list[int]] = []   # committed node ids contributed per round
+    nid = 0
+    ctx = prompt_len   # committed context length entering this round
+
+    for r, rd in enumerate(rounds):
+        drafts = rd["drafts"]
+        a = rd["num_accepted"]
+        correction = rd["correction"]
+        k = len(drafts)
+
+        draft_ids: list[int] = []
+        for i, tok in enumerate(drafts):
+            nodes.append(SpecNode(
+                id=nid, kind="draft", model="draft",
+                flops=forward_flops(d_dims, tokens_in_pass=1, context_len=ctx + i),
+                round=r, pos_in_round=i, token=tok,
+                status="accepted" if i < a else "rejected",
+                next=None,
+            ))
+            draft_ids.append(nid)
+            nid += 1
+
+        verify_id = nid
+        nodes.append(SpecNode(
+            id=verify_id, kind="verify", model="target",
+            # one parallel pass over the K drafted positions (+ the correction).
+            flops=forward_flops(t_dims, tokens_in_pass=k + 1, context_len=ctx + k),
+            round=r, pos_in_round=k, token=correction,
+            status="correction", next=None,
+        ))
+        nid += 1
+
+        # committed this round = accepted drafts (in order) then the correction.
+        round_spines.append(draft_ids[:a] + [verify_id])
+        ctx += a + 1
+
+    # Thread the committed spine across all rounds; rejected drafts stay pruned.
+    flat = [x for seq in round_spines for x in seq]
+    by_id = {n.id: n for n in nodes}
+    for i in range(len(flat) - 1):
+        by_id[flat[i]].next = flat[i + 1]
+
+    return SpecDecodeTaskGraph(
+        request_id=request_id,
+        draft_model=draft_model_source,
+        target_model=target_model_source,
         nodes=nodes,
     )
