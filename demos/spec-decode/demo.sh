@@ -59,9 +59,12 @@ S="${REPO_ROOT}/demos/spec-decode/servers"
 CLUSTER_ARGS=(); HEALTH_TIMEOUT=60
 if [[ "${MODE}" == "mock" ]]; then CLUSTER_ARGS=(--mock); else HEALTH_TIMEOUT=600; fi
 
+# Start the clusters one at a time: in --real mode each loads a draft+target
+# model pair onto the GPU, and loading both pairs concurrently can abort the
+# CUDA context. Sequential load is plenty fast.
 start_bg host_cluster   "${PY}" "${S}/host_cluster.py"   --port 8020 "${CLUSTER_ARGS[@]}"
-start_bg recomp_cluster "${PY}" "${S}/recomp_cluster.py" --port 8030 "${CLUSTER_ARGS[@]}"
 wait_health http://127.0.0.1:8020/health "${HEALTH_TIMEOUT}"
+start_bg recomp_cluster "${PY}" "${S}/recomp_cluster.py" --port 8030 "${CLUSTER_ARGS[@]}"
 wait_health http://127.0.0.1:8030/health "${HEALTH_TIMEOUT}"
 
 start_bg proof_server   "${PY}" "${S}/proof_server.py"   --port 8050 --work-dir "${GRAPHS}"
@@ -82,12 +85,21 @@ for prompt in "The quick brown fox" "Explain speculative decoding briefly"; do
     | "${PY}" -c "import json,sys; d=json.load(sys.stdin); print('  out:', repr(d['output'][:60]), '|', d['target_passes'], 'target passes for', len(d['output_ids']), 'tokens')"
 done
 
-sleep 1.0
-HEALTH="$(curl -sf http://127.0.0.1:8050/health)"
+# The verify+compare fan-out is async and, in --real mode, recomp re-runs the
+# whole decode (seconds), so poll the proof server until both compares land.
+echo "[demo] waiting for async verify+compare..."
+field() { "${PY}" -c "import json,sys; print(json.load(sys.stdin).get('$1',0))"; }
+COMPARE_DEADLINE=$(( $(date +%s) + 180 ))
+while :; do
+  HEALTH="$(curl -sf http://127.0.0.1:8050/health || echo '{}')"
+  COMPARED="$(echo "${HEALTH}" | field compared)"
+  [[ "${COMPARED:-0}" -ge 2 ]] && break
+  [[ $(date +%s) -ge ${COMPARE_DEADLINE} ]] && break
+  sleep 2
+done
 echo "[demo] proof server: ${HEALTH}"
-COMPARED="$(echo "${HEALTH}" | "${PY}" -c "import json,sys; print(json.load(sys.stdin)['compared'])")"
-MATCHES="$(echo "${HEALTH}" | "${PY}" -c "import json,sys; print(json.load(sys.stdin)['matches'])")"
-GRAPHS_BUILT="$(echo "${HEALTH}" | "${PY}" -c "import json,sys; print(json.load(sys.stdin)['graphs_built'])")"
+MATCHES="$(echo "${HEALTH}" | field matches)"
+GRAPHS_BUILT="$(echo "${HEALTH}" | field graphs_built)"
 if [[ "${COMPARED}" -lt 2 || "${MATCHES}" -lt 2 || "${GRAPHS_BUILT}" -lt 2 ]]; then
   echo "demo.sh: expected >=2 compared/matches/graphs; got compared=${COMPARED} matches=${MATCHES} graphs=${GRAPHS_BUILT}" >&2
   tail -20 "${LOGS}/proof_server.out" >&2 || true; exit 4
