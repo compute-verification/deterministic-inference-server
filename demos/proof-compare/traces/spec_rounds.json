@@ -1,0 +1,106 @@
+{
+  "prompt_len": 6,
+  "prompt": "tell me a story",
+  "rounds": [
+    {
+      "drafts": [
+        " about",
+        " a",
+        " girl",
+        " who"
+      ],
+      "num_accepted": 2,
+      "correction": " person"
+    },
+    {
+      "drafts": [
+        " who",
+        " is",
+        " a",
+        " doctor"
+      ],
+      "num_accepted": 3,
+      "correction": " scientist"
+    },
+    {
+      "drafts": [
+        " and",
+        " a",
+        " doctor",
+        ","
+      ],
+      "num_accepted": 0,
+      "correction": ","
+    },
+    {
+      "drafts": [
+        " and",
+        " a",
+        " person",
+        " who"
+      ],
+      "num_accepted": 1,
+      "correction": " they"
+    },
+    {
+      "drafts": [
+        " are",
+        " trying",
+        " to",
+        " find"
+      ],
+      "num_accepted": 0,
+      "correction": " discover"
+    },
+    {
+      "drafts": [
+        " a",
+        " new",
+        " type",
+        " of"
+      ],
+      "num_accepted": 2,
+      "correction": " element"
+    },
+    {
+      "drafts": [
+        " in",
+        " the",
+        " universe",
+        ","
+      ],
+      "num_accepted": 0,
+      "correction": ","
+    },
+    {
+      "drafts": [
+        " and",
+        " they",
+        " use",
+        " it"
+      ],
+      "num_accepted": 2,
+      "correction": " have"
+    },
+    {
+      "drafts": [
+        " to",
+        " make",
+        " a",
+        " decision"
+      ],
+      "num_accepted": 4,
+      "correction": " about"
+    },
+    {
+      "drafts": [
+        " whether",
+        " to",
+        " use",
+        " it"
+      ],
+      "num_accepted": 2,
+      "correction": " share"
+    }
+  ]
+}
