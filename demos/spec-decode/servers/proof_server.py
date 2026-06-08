@@ -17,10 +17,13 @@ from pathlib import Path
 from socketserver import ThreadingMixIn
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
+TRACERS = REPO_ROOT / "demos" / "proof-compare" / "tracers"
+for _p in (REPO_ROOT, TRACERS):
+    if str(_p) not in sys.path:
+        sys.path.insert(0, str(_p))
 
-from modules.proof_server.task_graph import build_spec_decode_task_graph  # noqa: E402
+from modules.proof_server.graph import build_graph  # noqa: E402
+from specdecode import trace_spec_decode  # noqa: E402
 
 LABEL = "proof-server"
 
@@ -80,13 +83,13 @@ class Handler(BaseHTTPRequestHandler):
         # 2. Build the spec-decode task graph from the host payload.
         graph_ok = False
         try:
-            graph = build_spec_decode_task_graph(
-                request_id=req_id,
-                draft_model_source=STATE.draft_model,
-                target_model_source=STATE.target_model,
+            trace = trace_spec_decode(
                 prompt_len=int(host["prompt_len"]),
                 rounds=host["rounds"],
+                draft_key=STATE.draft_model,
+                target_key=STATE.target_model,
             )
+            graph = build_graph(trace)
             STATE.work_dir.mkdir(parents=True, exist_ok=True)
             out = STATE.work_dir / f"spec_graph_{req_id}.json"
             out.write_text(graph.to_json())

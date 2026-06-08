@@ -30,10 +30,14 @@ from pathlib import Path
 from socketserver import ThreadingMixIn
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
+TRACERS = REPO_ROOT / "demos" / "proof-compare" / "tracers"
+for _p in (REPO_ROOT, TRACERS):
+    if str(_p) not in sys.path:
+        sys.path.insert(0, str(_p))
 
-from modules.proof_server.task_graph import build_task_graph  # noqa: E402
+from modules.proof_server import flops as _flops  # noqa: E402
+from modules.proof_server.graph import build_graph  # noqa: E402
+from inference import trace_inference  # noqa: E402
 
 
 class _State:
@@ -93,12 +97,19 @@ class CompareHandler(BaseHTTPRequestHandler):
         #    yet consumed -- a failure here must not break the compare path.
         graph_ok = False
         try:
-            graph = build_task_graph(
-                request_id=req_id,
-                prompt=prompt,
-                output=host_output,
-                model_source=STATE.model_source,
+            # Mock-mode demo: no tokenizer here, so whitespace-tokenize as a
+            # coarse stand-in (the real per-token graph is the GPU capture path).
+            prompt_toks = prompt.split() or [prompt]
+            out_toks = host_output.split() or [host_output]
+            out_iter = iter(out_toks)
+            trace = trace_inference(
+                prompt_ids=prompt_toks,
+                next_token=lambda _ctx: next(out_iter),
+                model_key=STATE.model_source,
+                shape_config=_flops.shape_for(STATE.model_source),
+                max_tokens=len(out_toks),
             )
+            graph = build_graph(trace)
             STATE.work_dir.mkdir(parents=True, exist_ok=True)
             out_path = STATE.work_dir / f"task_graph_{req_id}.json"
             out_path.write_text(graph.to_json())
