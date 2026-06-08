@@ -78,10 +78,19 @@ wait_health http://127.0.0.1:8010/health
 start_bg gateway        "${PY}" "${S}/gateway.py" --port 8000 --tap-url http://127.0.0.1:8010
 wait_health http://127.0.0.1:8000/health
 
+# Prompts: override with SPEC_PROMPTS="a|b|c" (pipe-separated).
+if [[ -n "${SPEC_PROMPTS:-}" ]]; then
+  IFS='|' read -ra PROMPTS <<< "${SPEC_PROMPTS}"
+else
+  PROMPTS=("The quick brown fox" "Explain speculative decoding briefly")
+fi
+EXPECTED="${#PROMPTS[@]}"
+MAXTOK="${SPEC_MAX_TOKENS:-16}"
+
 echo "=== sending requests through the gateway ==="
-for prompt in "The quick brown fox" "Explain speculative decoding briefly"; do
+for prompt in "${PROMPTS[@]}"; do
   curl -sf -X POST http://127.0.0.1:8000/request -H 'Content-Type: application/json' \
-    -d "{\"prompt\": \"${prompt}\", \"max_tokens\": 16, \"k\": 4}" \
+    -d "{\"prompt\": \"${prompt}\", \"max_tokens\": ${MAXTOK}, \"k\": 4}" \
     | "${PY}" -c "import json,sys; d=json.load(sys.stdin); print('  out:', repr(d['output'][:60]), '|', d['target_passes'], 'target passes for', len(d['output_ids']), 'tokens')"
 done
 
@@ -93,25 +102,30 @@ COMPARE_DEADLINE=$(( $(date +%s) + 180 ))
 while :; do
   HEALTH="$(curl -sf http://127.0.0.1:8050/health || echo '{}')"
   COMPARED="$(echo "${HEALTH}" | field compared)"
-  [[ "${COMPARED:-0}" -ge 2 ]] && break
+  [[ "${COMPARED:-0}" -ge "${EXPECTED}" ]] && break
   [[ $(date +%s) -ge ${COMPARE_DEADLINE} ]] && break
   sleep 2
 done
 echo "[demo] proof server: ${HEALTH}"
 MATCHES="$(echo "${HEALTH}" | field matches)"
 GRAPHS_BUILT="$(echo "${HEALTH}" | field graphs_built)"
-if [[ "${COMPARED}" -lt 2 || "${MATCHES}" -lt 2 || "${GRAPHS_BUILT}" -lt 2 ]]; then
-  echo "demo.sh: expected >=2 compared/matches/graphs; got compared=${COMPARED} matches=${MATCHES} graphs=${GRAPHS_BUILT}" >&2
+if [[ "${COMPARED}" -lt "${EXPECTED}" || "${MATCHES}" -lt "${EXPECTED}" || "${GRAPHS_BUILT}" -lt "${EXPECTED}" ]]; then
+  echo "demo.sh: expected >=${EXPECTED} compared/matches/graphs; got compared=${COMPARED} matches=${MATCHES} graphs=${GRAPHS_BUILT}" >&2
   tail -20 "${LOGS}/proof_server.out" >&2 || true; exit 4
+fi
+
+# Phase 1: copy graphs out for the viz when running on a GPU box. Do this
+# BEFORE the (truncated) display below -- a `json.tool | head` pipe can SIGPIPE
+# under `set -o pipefail` and abort the script before the copy otherwise.
+if [[ -n "${SPEC_GRAPH_OUT:-}" ]]; then
+  cp "${GRAPHS}"/spec_graph_*.json "${SPEC_GRAPH_OUT}/" 2>/dev/null || true
+  echo "[demo] copied graphs to ${SPEC_GRAPH_OUT}"
 fi
 
 echo ""
 echo "=== a built spec-decode graph (one request) ==="
 GRAPH_FILE="$(ls "${GRAPHS}"/spec_graph_*.json | head -1)"
-"${PY}" -m json.tool "${GRAPH_FILE}" | head -40
-
-# Phase 1: copy graphs out for the viz when running on a GPU box.
-if [[ -n "${SPEC_GRAPH_OUT:-}" ]]; then cp "${GRAPHS}"/spec_graph_*.json "${SPEC_GRAPH_OUT}/" 2>/dev/null || true; echo "[demo] copied graphs to ${SPEC_GRAPH_OUT}"; fi
+"${PY}" -m json.tool "${GRAPH_FILE}" | head -40 || true
 
 echo ""
 echo "ALL PASS"

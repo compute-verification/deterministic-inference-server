@@ -228,6 +228,9 @@ class TestSpecDecodeTaskGraph(unittest.TestCase):
     def _k(self, kind):
         return [n for n in self.g.nodes if n.kind == kind]
 
+    def _edges(self, kind):
+        return [e for e in self.g.edges if e.kind == kind]
+
     def test_node_counts(self):
         self.assertEqual(len(self._k("draft")), 12)   # 4 per round x 3
         self.assertEqual(len(self._k("verify")), 3)
@@ -239,38 +242,51 @@ class TestSpecDecodeTaskGraph(unittest.TestCase):
         self.assertEqual(len(acc), 8)   # 2 + 2 + 4
         self.assertEqual(len(rej), 4)   # 2 + 2 + 0
 
-    def test_rejected_drafts_are_pruned(self):
+    def test_every_draft_feeds_verify(self):
+        # The key dependency: EVERY draft (accepted or rejected) fans into its
+        # round's verify pass -- the target ingests all of them in one pass.
+        for n in self._k("draft"):
+            verify = next(v for v in self._k("verify") if v.round == n.round)
+            fanin = [e for e in self._edges("verify_in") if e.src == n.id]
+            self.assertEqual(len(fanin), 1)
+            self.assertEqual(fanin[0].dst, verify.id)
+        self.assertEqual(len(self._edges("verify_in")), 12)  # one per draft
+
+    def test_rejected_drafts_still_feed_verify(self):
         for n in self._k("draft"):
             if n.status == "rejected":
-                self.assertIsNone(n.next)             # dead-end
-                # ...and nothing on the spine points to it.
-                self.assertNotIn(n.id, [m.next for m in self.g.nodes])
+                self.assertTrue(any(e.src == n.id and e.kind == "verify_in" for e in self.g.edges))
+
+    def test_draft_autoregression_chain(self):
+        # Within each round, d_i -> d_{i+1}: K-1 draft edges per round.
+        for r in range(3):
+            self.assertEqual(len([e for e in self._edges("draft")
+                                  if self.byid[e.src].round == r]), 3)
+
+    def test_round_continuation_edges(self):
+        commit = self._edges("commit")
+        self.assertEqual(len(commit), 2)   # rounds-1
+        for e in commit:
+            self.assertEqual(self.byid[e.dst].pos_in_round, 0)   # -> next round's first draft
+            self.assertEqual(self.byid[e.src].kind, "verify")
 
     def test_verify_pass_is_fatter_than_a_draft_pass(self):
-        draft0 = self._k("draft")[0]
-        verify0 = self._k("verify")[0]
-        self.assertGreater(verify0.flops, draft0.flops)
+        self.assertGreater(self._k("verify")[0].flops, self._k("draft")[0].flops)
 
-    def test_spine_reconstructs_the_committed_output(self):
-        # Follow `next` from the head; the tokens spell the target's greedy output.
-        head = self.byid[0]
-        spine, n = [], head
-        while n is not None:
-            spine.append(n.token)
-            n = self.byid[n.next] if n.next is not None else None
-        expected = [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
-        self.assertEqual(spine, expected)
-
-    def test_spine_ends_at_a_verify(self):
-        tail = [n for n in self.g.nodes if n.next is None and n.kind == "verify"]
-        # the last verify (round 2) is the spine tail.
-        self.assertTrue(any(n.round == 2 for n in tail))
+    def test_committed_output_reconstruction(self):
+        committed = []
+        for r in range(3):
+            accs = sorted([n for n in self.g.nodes if n.round == r and n.status == "accepted"],
+                          key=lambda z: z.pos_in_round)
+            committed += [n.token for n in accs]
+            committed.append(next(v for v in self._k("verify") if v.round == r).token)
+        self.assertEqual(committed, [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20])
 
     def test_serializes_to_canonical_json(self):
         parsed = json.loads(self.g.to_json())
         self.assertEqual(parsed["draft_model"], "hf://Qwen/Qwen3-0.6B")
-        self.assertEqual(parsed["target_model"], "hf://Qwen/Qwen3-1.7B")
         self.assertEqual(len(parsed["nodes"]), 15)
+        self.assertEqual(len(parsed["edges"]), 9 + 12 + 2)  # draft + verify_in + commit
 
 
 if __name__ == "__main__":

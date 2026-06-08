@@ -408,7 +408,13 @@ class SpecNode:
     pos_in_round: int        # draft index 0..K-1; the verify node is K
     token: str               # proposed token (draft) or correction token (verify)
     status: str              # draft: "accepted"|"rejected" ; verify: "correction"
-    next: Optional[int]      # committed-spine successor; None if pruned or end
+
+
+@dataclass
+class SpecEdge:
+    src: int
+    dst: int
+    kind: str                # "draft" | "verify_in" | "commit"
 
 
 @dataclass
@@ -417,6 +423,7 @@ class SpecDecodeTaskGraph:
     draft_model: str
     target_model: str
     nodes: list[SpecNode] = field(default_factory=list)
+    edges: list[SpecEdge] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
@@ -424,6 +431,7 @@ class SpecDecodeTaskGraph:
             "draft_model": self.draft_model,
             "target_model": self.target_model,
             "nodes": [asdict(n) for n in self.nodes],
+            "edges": [asdict(e) for e in self.edges],
         }
 
     def to_json(self) -> str:
@@ -437,20 +445,33 @@ def build_spec_decode_task_graph(
     prompt_len: int,
     rounds: list[dict],
 ) -> SpecDecodeTaskGraph:
-    """Transform a speculative-decoding run into a spine-with-pruned-branches DAG.
+    """Transform a speculative-decoding run into its dependency DAG.
 
     ``rounds`` is a list of ``{"drafts": [str], "num_accepted": int,
     "correction": str}`` -- exactly what the spec-decode runner records. Each
-    round contributes K ``draft`` nodes (accepted/rejected) plus one ``verify``
-    node; the committed spine threads the accepted drafts and corrections.
+    round is a chain of K ``draft`` nodes (the draft model's autoregression) that
+    **all fan in** to one ``verify`` node -- the single target forward pass
+    ingests every draft, accepted or rejected, because it scores them in parallel
+    and doesn't know where the rejection is until after. Three edge kinds:
+
+      * ``draft``     -- d_i -> d_{i+1}, the draft model's own autoregression.
+      * ``verify_in`` -- d_i -> verify, every draft feeds the verify pass (this
+        is why a rejected draft is still a real dependency, not a detached stub).
+      * ``commit``    -- verify_r -> d_0 of round r+1: the verified output (kept
+        prefix + correction) is the context the next round drafts from.
+
+    Drafts past the first rejection are ingested by ``verify`` but, by causal
+    masking, contribute nothing to the committed output -- ``status`` carries
+    that accepted/rejected distinction for rendering.
     """
     d_dims = dims_for(draft_model_source)
     t_dims = dims_for(target_model_source)
 
     nodes: list[SpecNode] = []
-    round_spines: list[list[int]] = []   # committed node ids contributed per round
+    edges: list[SpecEdge] = []
     nid = 0
-    ctx = prompt_len   # committed context length entering this round
+    ctx = prompt_len           # committed context length entering this round
+    prev_verify: Optional[int] = None
 
     for r, rd in enumerate(rounds):
         drafts = rd["drafts"]
@@ -465,10 +486,13 @@ def build_spec_decode_task_graph(
                 flops=forward_flops(d_dims, tokens_in_pass=1, context_len=ctx + i),
                 round=r, pos_in_round=i, token=tok,
                 status="accepted" if i < a else "rejected",
-                next=None,
             ))
             draft_ids.append(nid)
             nid += 1
+
+        # draft autoregression: d_i -> d_{i+1}
+        for i in range(k - 1):
+            edges.append(SpecEdge(src=draft_ids[i], dst=draft_ids[i + 1], kind="draft"))
 
         verify_id = nid
         nodes.append(SpecNode(
@@ -476,23 +500,26 @@ def build_spec_decode_task_graph(
             # one parallel pass over the K drafted positions (+ the correction).
             flops=forward_flops(t_dims, tokens_in_pass=k + 1, context_len=ctx + k),
             round=r, pos_in_round=k, token=correction,
-            status="correction", next=None,
+            status="correction",
         ))
         nid += 1
 
-        # committed this round = accepted drafts (in order) then the correction.
-        round_spines.append(draft_ids[:a] + [verify_id])
-        ctx += a + 1
+        # fan-in: EVERY draft feeds the verify pass (accepted or rejected).
+        for did in draft_ids:
+            edges.append(SpecEdge(src=did, dst=verify_id, kind="verify_in"))
 
-    # Thread the committed spine across all rounds; rejected drafts stay pruned.
-    flat = [x for seq in round_spines for x in seq]
-    by_id = {n.id: n for n in nodes}
-    for i in range(len(flat) - 1):
-        by_id[flat[i]].next = flat[i + 1]
+        # round continuation: previous verify -> this round's first node.
+        if prev_verify is not None:
+            edges.append(SpecEdge(src=prev_verify,
+                                  dst=(draft_ids[0] if draft_ids else verify_id),
+                                  kind="commit"))
+        prev_verify = verify_id
+        ctx += a + 1
 
     return SpecDecodeTaskGraph(
         request_id=request_id,
         draft_model=draft_model_source,
         target_model=target_model_source,
         nodes=nodes,
+        edges=edges,
     )
