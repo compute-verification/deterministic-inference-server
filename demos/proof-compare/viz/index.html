@@ -288,7 +288,7 @@ document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () =>
 }));
 
 renderGraph(DATA.inference, document.getElementById("inf-host"),
-            document.getElementById("inf-meta"), "Inference — greedy decode chain");
+            document.getElementById("inf-meta"), "Inference (real H100) — greedy decode chain");
 renderGraph(DATA.training, document.getElementById("trn-host"),
             document.getElementById("trn-meta"), "LoRA training (stub) — spine + eval branches");
 renderGraph(DATA.spec, document.getElementById("spec-host"),
