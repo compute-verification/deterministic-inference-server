@@ -58,6 +58,21 @@ class TestBuildGraph(unittest.TestCase):
         with self.assertRaises(ValueError):
             build_graph(trace)
 
+    def test_rejects_input_greater_than_id_even_when_it_exists(self):
+        # Non-sequential ids: input(10) > id(3) must be rejected by the id rule,
+        # not merely by a "not seen yet" coincidence.
+        trace = {"shapes": SHAPES, "events": [
+            ev(id=10, kind="prefill", inputs=[]),
+            ev(id=3, kind="decode", inputs=[10]),
+        ]}
+        with self.assertRaises(ValueError):
+            build_graph(trace)
+
+    def test_rejects_self_loop(self):
+        trace = {"shapes": SHAPES, "events": [ev(id=0, inputs=[0])]}
+        with self.assertRaises(ValueError):
+            build_graph(trace)
+
     def test_rejects_duplicate_ids(self):
         trace = {"shapes": SHAPES, "events": [ev(id=0, inputs=[]), ev(id=0, inputs=[])]}
         with self.assertRaises(ValueError):

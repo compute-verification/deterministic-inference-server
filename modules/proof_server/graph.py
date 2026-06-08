@@ -90,10 +90,15 @@ def build_graph(trace: dict) -> Graph:
         if model not in shapes:
             raise ValueError(f"event {eid} references unknown model {model!r}")
         for src in ev.get("inputs", []):
+            # Spec invariant: inputs must reference a strictly-earlier id. This
+            # rejects self-loops (src == eid) and forward refs (src > eid)
+            # regardless of list order, guaranteeing the DAG the renderer's
+            # longest-path layering relies on.
+            if src >= eid:
+                raise ValueError(
+                    f"event {eid} input {src} is not < event id (self-loop/forward ref)")
             if src not in seen:
-                # not-yet-seen id is either dangling or a forward reference; both
-                # break the DAG assumption the renderer's layering relies on.
-                raise ValueError(f"event {eid} input {src} is not a prior event id")
+                raise ValueError(f"event {eid} input {src} is not a known prior event id")
             edges.append(Edge(src=src, dst=eid))
 
         shape = F.model_shape_from_config(shapes[model])
