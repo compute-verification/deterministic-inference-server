@@ -18,8 +18,8 @@
   }
   header { padding: 28px 32px 8px; }
   h1 { margin: 0 0 4px; font-size: 20px; font-weight: 600; }
-  .sub { color: var(--dim); font-size: 13px; max-width: 820px; }
-  .tabs { display: flex; gap: 8px; padding: 16px 32px 0; }
+  .sub { color: var(--dim); font-size: 13px; max-width: 880px; }
+  .tabs { display: flex; gap: 8px; padding: 16px 32px 0; flex-wrap: wrap; }
   .tab {
     padding: 8px 16px; border: 1px solid var(--line); border-bottom: none;
     background: var(--panel); color: var(--dim); cursor: pointer;
@@ -42,12 +42,10 @@
   svg { display: block; }
   .card { cursor: default; }
   .card .title { font-weight: 700; font-size: 12px; }
-  .card .l1, .card .l2 { font-size: 11.5px; }
-  .card text { fill: var(--ink); }
+  .card .l1 { font-size: 11.5px; }
   .muted { fill: var(--dim); }
-  .badge { font-size: 10px; }
   .tip {
-    position: fixed; pointer-events: none; z-index: 10; max-width: 320px;
+    position: fixed; pointer-events: none; z-index: 10; max-width: 340px;
     background: #1f2630; border: 1px solid var(--line); border-radius: 8px;
     padding: 10px 12px; font-size: 12px; color: var(--ink);
     box-shadow: 0 8px 24px rgba(0,0,0,.5); opacity: 0; transition: opacity .08s;
@@ -60,25 +58,26 @@
 <header>
   <h1>Task graphs · deterministic serving stack</h1>
   <div class="sub">
-    Each <b>task</b> is one forward pass. A task records the FLOPs it costs, the
-    context fed into it, and a pointer to the task that consumes its output.
-    Hover any node for detail.
+    Every workload is a graph of <b>tasks</b>. Each task (node) records its
+    <b>FLOPs</b> cost, the tokens it processed, and edges to the tasks that
+    consume it — all four graphs are auto-generated from one tracer→build→render
+    pipeline. Hover any node for detail.
   </div>
 </header>
 
 <div class="tabs">
   <div class="tab active" data-scene="inference">Inference (chain)</div>
-  <div class="tab" data-scene="training">LoRA training (branching DAG)</div>
-  <div class="tab" data-scene="spec">Speculative decoding (spine + pruned)</div>
-  <div class="tab" data-scene="coding">Coding agent (search → plan → code)</div>
+  <div class="tab" data-scene="training">LoRA training (branch)</div>
+  <div class="tab" data-scene="spec">Speculative decoding (fan-in)</div>
+  <div class="tab" data-scene="coding">Coding agent (diamond)</div>
 </div>
 
 <div class="scene active" id="inference">
   <div class="canvas"><div id="inf-host"></div></div>
   <div class="legend">
-    <span><i class="dot" style="background:var(--prefill)"></i> prefill — whole prompt at once (fat)</span>
-    <span><i class="dot" style="background:var(--decode)"></i> decode — 1 token (thin)</span>
-    <span>→ edge carries the emitted token into the next pass</span>
+    <span><i class="dot" style="background:var(--prefill)"></i> prefill</span>
+    <span><i class="dot" style="background:var(--decode)"></i> decode</span>
+    <span>→ each pass feeds the next (the chain)</span>
   </div>
   <div class="meta" id="inf-meta"></div>
 </div>
@@ -86,10 +85,10 @@
 <div class="scene" id="training">
   <div class="canvas"><div id="trn-host"></div></div>
   <div class="legend">
-    <span><i class="dot" style="background:var(--train)"></i> train step — fwd + bwd + update (~6N)</span>
-    <span><i class="dot" style="background:var(--eval)"></i> eval — forward-only branch off a checkpoint</span>
-    <span><i class="dot" style="background:var(--decode)"></i> nested inference task</span>
-    <span>⇣ dashed edge = checkpoint weights forked to an eval</span>
+    <span><i class="dot" style="background:var(--train)"></i> train step (~2× fwd, LoRA)</span>
+    <span><i class="dot" style="background:var(--eval)"></i> eval prefill</span>
+    <span><i class="dot" style="background:#56d4dd"></i> eval decode</span>
+    <span>evals branch off a checkpoint step</span>
   </div>
   <div class="meta" id="trn-meta"></div>
 </div>
@@ -97,10 +96,10 @@
 <div class="scene" id="spec">
   <div class="canvas"><div id="spec-host"></div></div>
   <div class="legend">
-    <span><i class="dot" style="background:var(--eval)"></i> draft accepted — committed</span>
-    <span><i class="dot" style="background:#f85149"></i> draft rejected — ingested by verify, then discarded</span>
-    <span><i class="dot" style="background:var(--train)"></i> verify (target) — one fat pass per round, emits the correction</span>
-    <span>thin lines = all K drafts fan into the verify pass · → draft chain / round handoff</span>
+    <span><i class="dot" style="background:var(--eval)"></i> draft accepted</span>
+    <span><i class="dot" style="background:#f85149"></i> draft rejected</span>
+    <span><i class="dot" style="background:var(--train)"></i> verify (target)</span>
+    <span>all K drafts fan into the verify pass</span>
   </div>
   <div class="meta" id="spec-meta"></div>
 </div>
@@ -108,13 +107,12 @@
 <div class="scene" id="coding">
   <div class="canvas"><div id="cod-host"></div></div>
   <div class="legend">
-    <span><i class="dot" style="background:#d2a8ff"></i> prompt (the goal)</span>
+    <span><i class="dot" style="background:#d2a8ff"></i> prompt</span>
     <span><i class="dot" style="background:var(--decode)"></i> search</span>
     <span><i class="dot" style="background:#56d4dd"></i> fetch</span>
     <span><i class="dot" style="background:var(--train)"></i> plan</span>
     <span><i class="dot" style="background:var(--prefill)"></i> codegen</span>
-    <span><i class="dot" style="background:var(--eval)"></i> verify ✓</span>
-    <span>prompt → retrievals → plan → codegen → verify · bar/label = cost (FLOPs ∝ tokens)</span>
+    <span><i class="dot" style="background:var(--eval)"></i> test</span>
   </div>
   <div class="meta" id="cod-meta"></div>
 </div>
@@ -122,7 +120,7 @@
 <div class="tip" id="tip"></div>
 
 <script>
-const DATA = {"inference": {"request_id": 1, "model_source": "hf://Qwen/Qwen3-1.7B", "vocab": {"0": "The ", "1": "capital ", "2": "of ", "3": "France ", "4": "is", "5": " ", "6": "Paris, ", "7": "a ", "8": "city ", "9": "light."}, "tasks": [{"id": 0, "flops": 17205734400, "prompt": [0, 1, 2, 3, 4], "next": 1, "kind": "prefill", "output_token": 5}, {"id": 1, "flops": 3441376256, "prompt": [0, 1, 2, 3, 4, 5], "next": 2, "kind": "decode", "output_token": 6}, {"id": 2, "flops": 3441605632, "prompt": [0, 1, 2, 3, 4, 5, 6], "next": 3, "kind": "decode", "output_token": 7}, {"id": 3, "flops": 3441835008, "prompt": [0, 1, 2, 3, 4, 5, 6, 7], "next": 4, "kind": "decode", "output_token": 8}, {"id": 4, "flops": 3442064384, "prompt": [0, 1, 2, 3, 4, 5, 6, 7, 8], "next": 5, "kind": "decode", "output_token": 2}, {"id": 5, "flops": 3442293760, "prompt": [0, 1, 2, 3, 4, 5, 6, 7, 8, 2], "next": null, "kind": "decode", "output_token": 9}]}, "training": {"request_id": 1, "model_source": "hf://Qwen/Qwen3-1.7B", "nodes": [{"id": 0, "kind": "train_step", "flops": 165208080384, "step": 0, "next": 1, "branches": [], "loss": 2.0, "checkpoint_digest": null, "eval_metric": null, "eval_graph": null}, {"id": 1, "kind": "train_step", "flops": 165208080384, "step": 1, "next": 2, "branches": [6], "loss": 1.6, "checkpoint_digest": "sha256:aa11", "eval_metric": null, "eval_graph": null}, {"id": 2, "kind": "train_step", "flops": 165208080384, "step": 2, "next": 3, "branches": [], "loss": 1.3, "checkpoint_digest": null, "eval_metric": null, "eval_graph": null}, {"id": 3, "kind": "train_step", "flops": 165208080384, "step": 3, "next": 4, "branches": [7], "loss": 1.1, "checkpoint_digest": "sha256:bb22", "eval_metric": null, "eval_graph": null}, {"id": 4, "kind": "train_step", "flops": 165208080384, "step": 4, "next": 5, "branches": [], "loss": 0.95, "checkpoint_digest": null, "eval_metric": null, "eval_graph": null}, {"id": 5, "kind": "train_step", "flops": 165208080384, "step": 5, "next": null, "branches": [8], "loss": 0.9, "checkpoint_digest": "sha256:cc33", "eval_metric": null, "eval_graph": null}, {"id": 6, "kind": "eval", "flops": 17204816896, "step": 2, "next": null, "branches": [], "loss": null, "checkpoint_digest": null, "eval_metric": 1.5, "eval_graph": {"request_id": 6, "model_source": "hf://Qwen/Qwen3-1.7B", "vocab": {"0": "2 ", "1": "+ ", "2": "=", "3": " ", "4": "4"}, "tasks": [{"id": 0, "flops": 13763670016, "prompt": [0, 1, 0, 2], "next": 1, "kind": "prefill", "output_token": 3}, {"id": 1, "flops": 3441146880, "prompt": [0, 1, 0, 2, 3], "next": null, "kind": "decode", "output_token": 4}]}}, {"id": 7, "kind": "eval", "flops": 17204816896, "step": 4, "next": null, "branches": [], "loss": null, "checkpoint_digest": null, "eval_metric": 1.2, "eval_graph": {"request_id": 7, "model_source": "hf://Qwen/Qwen3-1.7B", "vocab": {"0": "2 ", "1": "+ ", "2": "=", "3": " ", "4": "4"}, "tasks": [{"id": 0, "flops": 13763670016, "prompt": [0, 1, 0, 2], "next": 1, "kind": "prefill", "output_token": 3}, {"id": 1, "flops": 3441146880, "prompt": [0, 1, 0, 2, 3], "next": null, "kind": "decode", "output_token": 4}]}}, {"id": 8, "kind": "eval", "flops": 17204816896, "step": 6, "next": null, "branches": [], "loss": null, "checkpoint_digest": null, "eval_metric": 0.8, "eval_graph": {"request_id": 8, "model_source": "hf://Qwen/Qwen3-1.7B", "vocab": {"0": "2 ", "1": "+ ", "2": "=", "3": " ", "4": "4"}, "tasks": [{"id": 0, "flops": 13763670016, "prompt": [0, 1, 0, 2], "next": 1, "kind": "prefill", "output_token": 3}, {"id": 1, "flops": 3441146880, "prompt": [0, 1, 0, 2, 3], "next": null, "kind": "decode", "output_token": 4}]}}]}, "spec": {"draft_model": "hf://Qwen/Qwen3-0.6B", "edges": [{"dst": 1, "kind": "draft", "src": 0}, {"dst": 2, "kind": "draft", "src": 1}, {"dst": 3, "kind": "draft", "src": 2}, {"dst": 4, "kind": "verify_in", "src": 0}, {"dst": 4, "kind": "verify_in", "src": 1}, {"dst": 4, "kind": "verify_in", "src": 2}, {"dst": 4, "kind": "verify_in", "src": 3}, {"dst": 6, "kind": "draft", "src": 5}, {"dst": 7, "kind": "draft", "src": 6}, {"dst": 8, "kind": "draft", "src": 7}, {"dst": 9, "kind": "verify_in", "src": 5}, {"dst": 9, "kind": "verify_in", "src": 6}, {"dst": 9, "kind": "verify_in", "src": 7}, {"dst": 9, "kind": "verify_in", "src": 8}, {"dst": 5, "kind": "commit", "src": 4}, {"dst": 11, "kind": "draft", "src": 10}, {"dst": 12, "kind": "draft", "src": 11}, {"dst": 13, "kind": "draft", "src": 12}, {"dst": 14, "kind": "verify_in", "src": 10}, {"dst": 14, "kind": "verify_in", "src": 11}, {"dst": 14, "kind": "verify_in", "src": 12}, {"dst": 14, "kind": "verify_in", "src": 13}, {"dst": 10, "kind": "commit", "src": 9}, {"dst": 16, "kind": "draft", "src": 15}, {"dst": 17, "kind": "draft", "src": 16}, {"dst": 18, "kind": "draft", "src": 17}, {"dst": 19, "kind": "verify_in", "src": 15}, {"dst": 19, "kind": "verify_in", "src": 16}, {"dst": 19, "kind": "verify_in", "src": 17}, {"dst": 19, "kind": "verify_in", "src": 18}, {"dst": 15, "kind": "commit", "src": 14}, {"dst": 21, "kind": "draft", "src": 20}, {"dst": 22, "kind": "draft", "src": 21}, {"dst": 23, "kind": "draft", "src": 22}, {"dst": 24, "kind": "verify_in", "src": 20}, {"dst": 24, "kind": "verify_in", "src": 21}, {"dst": 24, "kind": "verify_in", "src": 22}, {"dst": 24, "kind": "verify_in", "src": 23}, {"dst": 20, "kind": "commit", "src": 19}, {"dst": 26, "kind": "draft", "src": 25}, {"dst": 27, "kind": "draft", "src": 26}, {"dst": 28, "kind": "draft", "src": 27}, {"dst": 29, "kind": "verify_in", "src": 25}, {"dst": 29, "kind": "verify_in", "src": 26}, {"dst": 29, "kind": "verify_in", "src": 27}, {"dst": 29, "kind": "verify_in", "src": 28}, {"dst": 25, "kind": "commit", "src": 24}, {"dst": 31, "kind": "draft", "src": 30}, {"dst": 32, "kind": "draft", "src": 31}, {"dst": 33, "kind": "draft", "src": 32}, {"dst": 34, "kind": "verify_in", "src": 30}, {"dst": 34, "kind": "verify_in", "src": 31}, {"dst": 34, "kind": "verify_in", "src": 32}, {"dst": 34, "kind": "verify_in", "src": 33}, {"dst": 30, "kind": "commit", "src": 29}, {"dst": 36, "kind": "draft", "src": 35}, {"dst": 37, "kind": "draft", "src": 36}, {"dst": 38, "kind": "draft", "src": 37}, {"dst": 39, "kind": "verify_in", "src": 35}, {"dst": 39, "kind": "verify_in", "src": 36}, {"dst": 39, "kind": "verify_in", "src": 37}, {"dst": 39, "kind": "verify_in", "src": 38}, {"dst": 35, "kind": "commit", "src": 34}, {"dst": 41, "kind": "draft", "src": 40}, {"dst": 42, "kind": "draft", "src": 41}, {"dst": 43, "kind": "draft", "src": 42}, {"dst": 44, "kind": "verify_in", "src": 40}, {"dst": 44, "kind": "verify_in", "src": 41}, {"dst": 44, "kind": "verify_in", "src": 42}, {"dst": 44, "kind": "verify_in", "src": 43}, {"dst": 40, "kind": "commit", "src": 39}, {"dst": 46, "kind": "draft", "src": 45}, {"dst": 47, "kind": "draft", "src": 46}, {"dst": 48, "kind": "draft", "src": 47}, {"dst": 49, "kind": "verify_in", "src": 45}, {"dst": 49, "kind": "verify_in", "src": 46}, {"dst": 49, "kind": "verify_in", "src": 47}, {"dst": 49, "kind": "verify_in", "src": 48}, {"dst": 45, "kind": "commit", "src": 44}], "nodes": [{"flops": 1200458752, "id": 0, "kind": "draft", "model": "draft", "pos_in_round": 0, "round": 0, "status": "accepted", "token": " about"}, {"flops": 1200573440, "id": 1, "kind": "draft", "model": "draft", "pos_in_round": 1, "round": 0, "status": "accepted", "token": " a"}, {"flops": 1200688128, "id": 2, "kind": "draft", "model": "draft", "pos_in_round": 2, "round": 0, "status": "rejected", "token": " girl"}, {"flops": 1200802816, "id": 3, "kind": "draft", "model": "draft", "pos_in_round": 3, "round": 0, "status": "rejected", "token": " who"}, {"flops": 17209175040, "id": 4, "kind": "verify", "model": "target", "pos_in_round": 4, "round": 0, "status": "correction", "token": " person"}, {"flops": 1200802816, "id": 5, "kind": "draft", "model": "draft", "pos_in_round": 0, "round": 1, "status": "accepted", "token": " who"}, {"flops": 1200917504, "id": 6, "kind": "draft", "model": "draft", "pos_in_round": 1, "round": 1, "status": "accepted", "token": " is"}, {"flops": 1201032192, "id": 7, "kind": "draft", "model": "draft", "pos_in_round": 2, "round": 1, "status": "accepted", "token": " a"}, {"flops": 1201146880, "id": 8, "kind": "draft", "model": "draft", "pos_in_round": 3, "round": 1, "status": "rejected", "token": " doctor"}, {"flops": 17212615680, "id": 9, "kind": "verify", "model": "target", "pos_in_round": 4, "round": 1, "status": "correction", "token": " scientist"}, {"flops": 1201261568, "id": 10, "kind": "draft", "model": "draft", "pos_in_round": 0, "round": 2, "status": "rejected", "token": " and"}, {"flops": 1201376256, "id": 11, "kind": "draft", "model": "draft", "pos_in_round": 1, "round": 2, "status": "rejected", "token": " a"}, {"flops": 1201490944, "id": 12, "kind": "draft", "model": "draft", "pos_in_round": 2, "round": 2, "status": "rejected", "token": " doctor"}, {"flops": 1201605632, "id": 13, "kind": "draft", "model": "draft", "pos_in_round": 3, "round": 2, "status": "rejected", "token": ","}, {"flops": 17217203200, "id": 14, "kind": "verify", "model": "target", "pos_in_round": 4, "round": 2, "status": "correction", "token": ","}, {"flops": 1201376256, "id": 15, "kind": "draft", "model": "draft", "pos_in_round": 0, "round": 3, "status": "accepted", "token": " and"}, {"flops": 1201490944, "id": 16, "kind": "draft", "model": "draft", "pos_in_round": 1, "round": 3, "status": "rejected", "token": " a"}, {"flops": 1201605632, "id": 17, "kind": "draft", "model": "draft", "pos_in_round": 2, "round": 3, "status": "rejected", "token": " person"}, {"flops": 1201720320, "id": 18, "kind": "draft", "model": "draft", "pos_in_round": 3, "round": 3, "status": "rejected", "token": " who"}, {"flops": 17218350080, "id": 19, "kind": "verify", "model": "target", "pos_in_round": 4, "round": 3, "status": "correction", "token": " they"}, {"flops": 1201605632, "id": 20, "kind": "draft", "model": "draft", "pos_in_round": 0, "round": 4, "status": "rejected", "token": " are"}, {"flops": 1201720320, "id": 21, "kind": "draft", "model": "draft", "pos_in_round": 1, "round": 4, "status": "rejected", "token": " trying"}, {"flops": 1201835008, "id": 22, "kind": "draft", "model": "draft", "pos_in_round": 2, "round": 4, "status": "rejected", "token": " to"}, {"flops": 1201949696, "id": 23, "kind": "draft", "model": "draft", "pos_in_round": 3, "round": 4, "status": "rejected", "token": " find"}, {"flops": 17220643840, "id": 24, "kind": "verify", "model": "target", "pos_in_round": 4, "round": 4, "status": "correction", "token": " discover"}, {"flops": 1201720320, "id": 25, "kind": "draft", "model": "draft", "pos_in_round": 0, "round": 5, "status": "accepted", "token": " a"}, {"flops": 1201835008, "id": 26, "kind": "draft", "model": "draft", "pos_in_round": 1, "round": 5, "status": "accepted", "token": " new"}, {"flops": 1201949696, "id": 27, "kind": "draft", "model": "draft", "pos_in_round": 2, "round": 5, "status": "rejected", "token": " type"}, {"flops": 1202064384, "id": 28, "kind": "draft", "model": "draft", "pos_in_round": 3, "round": 5, "status": "rejected", "token": " of"}, {"flops": 17221790720, "id": 29, "kind": "verify", "model": "target", "pos_in_round": 4, "round": 5, "status": "correction", "token": " element"}, {"flops": 1202064384, "id": 30, "kind": "draft", "model": "draft", "pos_in_round": 0, "round": 6, "status": "rejected", "token": " in"}, {"flops": 1202179072, "id": 31, "kind": "draft", "model": "draft", "pos_in_round": 1, "round": 6, "status": "rejected", "token": " the"}, {"flops": 1202293760, "id": 32, "kind": "draft", "model": "draft", "pos_in_round": 2, "round": 6, "status": "rejected", "token": " universe"}, {"flops": 1202408448, "id": 33, "kind": "draft", "model": "draft", "pos_in_round": 3, "round": 6, "status": "rejected", "token": ","}, {"flops": 17225231360, "id": 34, "kind": "verify", "model": "target", "pos_in_round": 4, "round": 6, "status": "correction", "token": ","}, {"flops": 1202179072, "id": 35, "kind": "draft", "model": "draft", "pos_in_round": 0, "round": 7, "status": "accepted", "token": " and"}, {"flops": 1202293760, "id": 36, "kind": "draft", "model": "draft", "pos_in_round": 1, "round": 7, "status": "accepted", "token": " they"}, {"flops": 1202408448, "id": 37, "kind": "draft", "model": "draft", "pos_in_round": 2, "round": 7, "status": "rejected", "token": " use"}, {"flops": 1202523136, "id": 38, "kind": "draft", "model": "draft", "pos_in_round": 3, "round": 7, "status": "rejected", "token": " it"}, {"flops": 17226378240, "id": 39, "kind": "verify", "model": "target", "pos_in_round": 4, "round": 7, "status": "correction", "token": " have"}, {"flops": 1202523136, "id": 40, "kind": "draft", "model": "draft", "pos_in_round": 0, "round": 8, "status": "accepted", "token": " to"}, {"flops": 1202637824, "id": 41, "kind": "draft", "model": "draft", "pos_in_round": 1, "round": 8, "status": "accepted", "token": " make"}, {"flops": 1202752512, "id": 42, "kind": "draft", "model": "draft", "pos_in_round": 2, "round": 8, "status": "accepted", "token": " a"}, {"flops": 1202867200, "id": 43, "kind": "draft", "model": "draft", "pos_in_round": 3, "round": 8, "status": "accepted", "token": " decision"}, {"flops": 17229818880, "id": 44, "kind": "verify", "model": "target", "pos_in_round": 4, "round": 8, "status": "correction", "token": " about"}, {"flops": 1203096576, "id": 45, "kind": "draft", "model": "draft", "pos_in_round": 0, "round": 9, "status": "accepted", "token": " whether"}, {"flops": 1203211264, "id": 46, "kind": "draft", "model": "draft", "pos_in_round": 1, "round": 9, "status": "accepted", "token": " to"}, {"flops": 1203325952, "id": 47, "kind": "draft", "model": "draft", "pos_in_round": 2, "round": 9, "status": "rejected", "token": " use"}, {"flops": 1203440640, "id": 48, "kind": "draft", "model": "draft", "pos_in_round": 3, "round": 9, "status": "rejected", "token": " it"}, {"flops": 17235553280, "id": 49, "kind": "verify", "model": "target", "pos_in_round": 4, "round": 9, "status": "correction", "token": " share"}], "request_id": 1, "target_model": "hf://Qwen/Qwen3-1.7B", "prompt": "tell me a story"}, "coding": {"edges": [{"dst": 1, "kind": "prompts", "src": 0}, {"dst": 2, "kind": "prompts", "src": 0}, {"dst": 3, "kind": "prompts", "src": 0}, {"dst": 4, "kind": "prompts", "src": 0}, {"dst": 5, "kind": "prompts", "src": 0}, {"dst": 6, "kind": "prompts", "src": 0}, {"dst": 7, "kind": "informs", "src": 1}, {"dst": 7, "kind": "informs", "src": 2}, {"dst": 7, "kind": "informs", "src": 3}, {"dst": 7, "kind": "informs", "src": 4}, {"dst": 7, "kind": "informs", "src": 5}, {"dst": 7, "kind": "informs", "src": 6}, {"dst": 8, "kind": "plans", "src": 7}, {"dst": 9, "kind": "plans", "src": 7}, {"dst": 10, "kind": "verifies", "src": 8}, {"dst": 10, "kind": "verifies", "src": 9}], "goal": "Summarize a paper that just came out, then build and implement it.", "nodes": [{"flops": 2560000000000, "id": 0, "kind": "prompt", "output": "goal accepted \u2192 search for a recent, small, implementable LLM-decoding paper", "prompt": "Summarize a paper that just came out, then build and implement it.", "status": "ok", "tokens": 40}, {"flops": 39680000000000, "id": 1, "kind": "search", "output": "results: typical sampling, top-n\u03c3, min-p, \u2026 (candidates)", "prompt": "WebSearch: '2026 new LLM sampling decoding method paper logits simple algorithm'", "status": "ok", "tokens": 620}, {"flops": 40960000000000, "id": 2, "kind": "search", "output": "surfaced p-less sampling (arXiv:2509.23234) \u2014 hyperparameter-free", "prompt": "WebSearch: 'truncation sampling min-p top-n sigma successor paper'", "status": "ok", "tokens": 640}, {"flops": 70400000000000, "id": 3, "kind": "fetch", "output": "information-theoretic; dynamic threshold from the whole distribution", "prompt": "WebFetch: arxiv.org/abs/2509.23234 (abstract)", "status": "ok", "tokens": 1100}, {"flops": 403200000000000, "id": 4, "kind": "fetch", "output": "exact algorithm: L[P]=\u03a3P(v)\u00b2 (=exp(-H\u2082)); keep P(v)\u2265L[P]; renormalize; sample", "prompt": "WebFetch: arxiv.org/html/2509.23234v1 (full paper)", "status": "ok", "tokens": 6300}, {"flops": 115200000000000, "id": 5, "kind": "fetch", "output": "reference implementation lives in p_less_samplers.py", "prompt": "WebFetch: github.com/ryttry/p-less", "status": "ok", "tokens": 1800}, {"flops": 96000000000000, "id": 6, "kind": "fetch", "output": "p=probs.square().sum(); mask probs<p; renormalize; multinomial", "prompt": "WebFetch: raw p_less_samplers.py", "status": "ok", "tokens": 1500}, {"flops": 185600000000000, "id": 7, "kind": "plan", "output": "p-less: threshold = collision likelihood L[P]=\u03a3P(v)\u00b2 (R\u00e9nyi-2 entropy); keep tokens with P(v)\u2265L[P]; renormalize; sample. Hyperparameter-free; argmax always kept (maxP\u2265\u03a3P\u00b2) so the set is non-empty.", "prompt": "the fetched algorithm + reference code", "status": "ok", "tokens": 2900}, {"flops": 76800000000000, "id": 8, "kind": "codegen", "output": "demos/coding-agent/generated/p_less.py \u2014 softmax, collision_likelihood, p_less_filter, p_less_sample (pure stdlib, CPU)", "prompt": "the plan", "status": "ok", "tokens": 1200}, {"flops": 89600000000000, "id": 9, "kind": "codegen", "output": "tests/unit/test_p_less.py \u2014 9 cases (uniform-keeps-all, peaked-keeps-top, argmax-survives, flatter-keeps-more, determinism, \u2026)", "prompt": "the plan + the implementation", "status": "ok", "tokens": 1400}, {"flops": 25600000000000, "id": 10, "kind": "verify", "output": "9 passed \u2713", "prompt": "python -m unittest tests.unit.test_p_less", "status": "ok", "tokens": 400}], "request_id": 1}};
+const DATA = {"inference": {"nodes": [{"id": 0, "kind": "prefill", "inputs": [], "model": "Qwen/Qwen3-1.7B", "tokens": 6, "attended": 21, "mode": "fwd", "logits": 1, "status": "", "label": "prefill", "payload": {"prompt_len": 6}, "flops": 17538580480}, {"id": 1, "kind": "decode", "inputs": [0], "model": "Qwen/Qwen3-1.7B", "tokens": 1, "attended": 7, "mode": "fwd", "logits": 1, "status": "", "label": "decode", "payload": {"token_id": 6}, "flops": 3442507776}, {"id": 2, "kind": "decode", "inputs": [1], "model": "Qwen/Qwen3-1.7B", "tokens": 1, "attended": 8, "mode": "fwd", "logits": 1, "status": "", "label": "decode", "payload": {"token_id": 7}, "flops": 3442737152}, {"id": 3, "kind": "decode", "inputs": [2], "model": "Qwen/Qwen3-1.7B", "tokens": 1, "attended": 9, "mode": "fwd", "logits": 1, "status": "", "label": "decode", "payload": {"token_id": 8}, "flops": 3442966528}, {"id": 4, "kind": "decode", "inputs": [3], "model": "Qwen/Qwen3-1.7B", "tokens": 1, "attended": 10, "mode": "fwd", "logits": 1, "status": "", "label": "decode", "payload": {"token_id": 9}, "flops": 3443195904}, {"id": 5, "kind": "decode", "inputs": [4], "model": "Qwen/Qwen3-1.7B", "tokens": 1, "attended": 11, "mode": "fwd", "logits": 1, "status": "", "label": "decode", "payload": {"token_id": 10}, "flops": 3443425280}, {"id": 6, "kind": "decode", "inputs": [5], "model": "Qwen/Qwen3-1.7B", "tokens": 1, "attended": 12, "mode": "fwd", "logits": 1, "status": "", "label": "decode", "payload": {"token_id": 11}, "flops": 3443654656}, {"id": 7, "kind": "decode", "inputs": [6], "model": "Qwen/Qwen3-1.7B", "tokens": 1, "attended": 13, "mode": "fwd", "logits": 1, "status": "", "label": "decode", "payload": {"token_id": 12}, "flops": 3443884032}, {"id": 8, "kind": "decode", "inputs": [7], "model": "Qwen/Qwen3-1.7B", "tokens": 1, "attended": 14, "mode": "fwd", "logits": 1, "status": "", "label": "decode", "payload": {"token_id": 13}, "flops": 3444113408}], "edges": [{"src": 0, "dst": 1}, {"src": 1, "dst": 2}, {"src": 2, "dst": 3}, {"src": 3, "dst": 4}, {"src": 4, "dst": 5}, {"src": 5, "dst": 6}, {"src": 6, "dst": 7}, {"src": 7, "dst": 8}], "shapes": {"Qwen/Qwen3-1.7B": {"num_hidden_layers": 28, "hidden_size": 2048, "num_attention_heads": 16, "head_dim": 128, "num_key_value_heads": 8, "intermediate_size": 6144, "vocab_size": 151936}}}, "spec": {"nodes": [{"id": 0, "kind": "draft", "inputs": [], "model": "hf://Qwen/Qwen3-0.6B", "tokens": 1, "attended": 6, "mode": "fwd", "logits": 1, "status": "accepted", "label": "draft 0", "payload": {"token": " about"}, "flops": 1193345024}, {"id": 1, "kind": "draft", "inputs": [0], "model": "hf://Qwen/Qwen3-0.6B", "tokens": 1, "attended": 7, "mode": "fwd", "logits": 1, "status": "accepted", "label": "draft 1", "payload": {"token": " a"}, "flops": 1193574400}, {"id": 2, "kind": "draft", "inputs": [1], "model": "hf://Qwen/Qwen3-0.6B", "tokens": 1, "attended": 8, "mode": "fwd", "logits": 1, "status": "rejected", "label": "draft 2", "payload": {"token": " girl"}, "flops": 1193803776}, {"id": 3, "kind": "draft", "inputs": [2], "model": "hf://Qwen/Qwen3-0.6B", "tokens": 1, "attended": 9, "mode": "fwd", "logits": 1, "status": "rejected", "label": "draft 3", "payload": {"token": " who"}, "flops": 1194033152}, {"id": 4, "kind": "verify", "inputs": [0, 1, 2, 3], "model": "hf://Qwen/Qwen3-1.7B", "tokens": 5, "attended": 40, "mode": "fwd", "logits": 5, "status": "", "label": "verify", "payload": {"correction": " person", "num_accepted": 2}, "flops": 17213685760}, {"id": 5, "kind": "draft", "inputs": [4], "model": "hf://Qwen/Qwen3-0.6B", "tokens": 1, "attended": 9, "mode": "fwd", "logits": 1, "status": "accepted", "label": "draft 0", "payload": {"token": " who"}, "flops": 1194033152}, {"id": 6, "kind": "draft", "inputs": [5], "model": "hf://Qwen/Qwen3-0.6B", "tokens": 1, "attended": 10, "mode": "fwd", "logits": 1, "status": "accepted", "label": "draft 1", "payload": {"token": " is"}, "flops": 1194262528}, {"id": 7, "kind": "draft", "inputs": [6], "model": "hf://Qwen/Qwen3-0.6B", "tokens": 1, "attended": 11, "mode": "fwd", "logits": 1, "status": "accepted", "label": "draft 2", "payload": {"token": " a"}, "flops": 1194491904}, {"id": 8, "kind": "draft", "inputs": [7], "model": "hf://Qwen/Qwen3-0.6B", "tokens": 1, "attended": 12, "mode": "fwd", "logits": 1, "status": "rejected", "label": "draft 3", "payload": {"token": " doctor"}, "flops": 1194721280}, {"id": 9, "kind": "verify", "inputs": [5, 6, 7, 8], "model": "hf://Qwen/Qwen3-1.7B", "tokens": 5, "attended": 55, "mode": "fwd", "logits": 5, "status": "", "label": "verify", "payload": {"correction": " scientist", "num_accepted": 3}, "flops": 17217126400}, {"id": 10, "kind": "draft", "inputs": [9], "model": "hf://Qwen/Qwen3-0.6B", "tokens": 1, "attended": 13, "mode": "fwd", "logits": 1, "status": "rejected", "label": "draft 0", "payload": {"token": " and"}, "flops": 1194950656}, {"id": 11, "kind": "draft", "inputs": [10], "model": "hf://Qwen/Qwen3-0.6B", "tokens": 1, "attended": 14, "mode": "fwd", "logits": 1, "status": "rejected", "label": "draft 1", "payload": {"token": " a"}, "flops": 1195180032}, {"id": 12, "kind": "draft", "inputs": [11], "model": "hf://Qwen/Qwen3-0.6B", "tokens": 1, "attended": 15, "mode": "fwd", "logits": 1, "status": "rejected", "label": "draft 2", "payload": {"token": " doctor"}, "flops": 1195409408}, {"id": 13, "kind": "draft", "inputs": [12], "model": "hf://Qwen/Qwen3-0.6B", "tokens": 1, "attended": 16, "mode": "fwd", "logits": 1, "status": "rejected", "label": "draft 3", "payload": {"token": ","}, "flops": 1195638784}, {"id": 14, "kind": "verify", "inputs": [10, 11, 12, 13], "model": "hf://Qwen/Qwen3-1.7B", "tokens": 5, "attended": 75, "mode": "fwd", "logits": 5, "status": "", "label": "verify", "payload": {"correction": ",", "num_accepted": 0}, "flops": 17221713920}, {"id": 15, "kind": "draft", "inputs": [14], "model": "hf://Qwen/Qwen3-0.6B", "tokens": 1, "attended": 14, "mode": "fwd", "logits": 1, "status": "accepted", "label": "draft 0", "payload": {"token": " and"}, "flops": 1195180032}, {"id": 16, "kind": "draft", "inputs": [15], "model": "hf://Qwen/Qwen3-0.6B", "tokens": 1, "attended": 15, "mode": "fwd", "logits": 1, "status": "rejected", "label": "draft 1", "payload": {"token": " a"}, "flops": 1195409408}, {"id": 17, "kind": "draft", "inputs": [16], "model": "hf://Qwen/Qwen3-0.6B", "tokens": 1, "attended": 16, "mode": "fwd", "logits": 1, "status": "rejected", "label": "draft 2", "payload": {"token": " person"}, "flops": 1195638784}, {"id": 18, "kind": "draft", "inputs": [17], "model": "hf://Qwen/Qwen3-0.6B", "tokens": 1, "attended": 17, "mode": "fwd", "logits": 1, "status": "rejected", "label": "draft 3", "payload": {"token": " who"}, "flops": 1195868160}, {"id": 19, "kind": "verify", "inputs": [15, 16, 17, 18], "model": "hf://Qwen/Qwen3-1.7B", "tokens": 5, "attended": 80, "mode": "fwd", "logits": 5, "status": "", "label": "verify", "payload": {"correction": " they", "num_accepted": 1}, "flops": 17222860800}, {"id": 20, "kind": "draft", "inputs": [19], "model": "hf://Qwen/Qwen3-0.6B", "tokens": 1, "attended": 16, "mode": "fwd", "logits": 1, "status": "rejected", "label": "draft 0", "payload": {"token": " are"}, "flops": 1195638784}, {"id": 21, "kind": "draft", "inputs": [20], "model": "hf://Qwen/Qwen3-0.6B", "tokens": 1, "attended": 17, "mode": "fwd", "logits": 1, "status": "rejected", "label": "draft 1", "payload": {"token": " trying"}, "flops": 1195868160}, {"id": 22, "kind": "draft", "inputs": [21], "model": "hf://Qwen/Qwen3-0.6B", "tokens": 1, "attended": 18, "mode": "fwd", "logits": 1, "status": "rejected", "label": "draft 2", "payload": {"token": " to"}, "flops": 1196097536}, {"id": 23, "kind": "draft", "inputs": [22], "model": "hf://Qwen/Qwen3-0.6B", "tokens": 1, "attended": 19, "mode": "fwd", "logits": 1, "status": "rejected", "label": "draft 3", "payload": {"token": " find"}, "flops": 1196326912}, {"id": 24, "kind": "verify", "inputs": [20, 21, 22, 23], "model": "hf://Qwen/Qwen3-1.7B", "tokens": 5, "attended": 90, "mode": "fwd", "logits": 5, "status": "", "label": "verify", "payload": {"correction": " discover", "num_accepted": 0}, "flops": 17225154560}, {"id": 25, "kind": "draft", "inputs": [24], "model": "hf://Qwen/Qwen3-0.6B", "tokens": 1, "attended": 17, "mode": "fwd", "logits": 1, "status": "accepted", "label": "draft 0", "payload": {"token": " a"}, "flops": 1195868160}, {"id": 26, "kind": "draft", "inputs": [25], "model": "hf://Qwen/Qwen3-0.6B", "tokens": 1, "attended": 18, "mode": "fwd", "logits": 1, "status": "accepted", "label": "draft 1", "payload": {"token": " new"}, "flops": 1196097536}, {"id": 27, "kind": "draft", "inputs": [26], "model": "hf://Qwen/Qwen3-0.6B", "tokens": 1, "attended": 19, "mode": "fwd", "logits": 1, "status": "rejected", "label": "draft 2", "payload": {"token": " type"}, "flops": 1196326912}, {"id": 28, "kind": "draft", "inputs": [27], "model": "hf://Qwen/Qwen3-0.6B", "tokens": 1, "attended": 20, "mode": "fwd", "logits": 1, "status": "rejected", "label": "draft 3", "payload": {"token": " of"}, "flops": 1196556288}, {"id": 29, "kind": "verify", "inputs": [25, 26, 27, 28], "model": "hf://Qwen/Qwen3-1.7B", "tokens": 5, "attended": 95, "mode": "fwd", "logits": 5, "status": "", "label": "verify", "payload": {"correction": " element", "num_accepted": 2}, "flops": 17226301440}, {"id": 30, "kind": "draft", "inputs": [29], "model": "hf://Qwen/Qwen3-0.6B", "tokens": 1, "attended": 20, "mode": "fwd", "logits": 1, "status": "rejected", "label": "draft 0", "payload": {"token": " in"}, "flops": 1196556288}, {"id": 31, "kind": "draft", "inputs": [30], "model": "hf://Qwen/Qwen3-0.6B", "tokens": 1, "attended": 21, "mode": "fwd", "logits": 1, "status": "rejected", "label": "draft 1", "payload": {"token": " the"}, "flops": 1196785664}, {"id": 32, "kind": "draft", "inputs": [31], "model": "hf://Qwen/Qwen3-0.6B", "tokens": 1, "attended": 22, "mode": "fwd", "logits": 1, "status": "rejected", "label": "draft 2", "payload": {"token": " universe"}, "flops": 1197015040}, {"id": 33, "kind": "draft", "inputs": [32], "model": "hf://Qwen/Qwen3-0.6B", "tokens": 1, "attended": 23, "mode": "fwd", "logits": 1, "status": "rejected", "label": "draft 3", "payload": {"token": ","}, "flops": 1197244416}, {"id": 34, "kind": "verify", "inputs": [30, 31, 32, 33], "model": "hf://Qwen/Qwen3-1.7B", "tokens": 5, "attended": 110, "mode": "fwd", "logits": 5, "status": "", "label": "verify", "payload": {"correction": ",", "num_accepted": 0}, "flops": 17229742080}, {"id": 35, "kind": "draft", "inputs": [34], "model": "hf://Qwen/Qwen3-0.6B", "tokens": 1, "attended": 21, "mode": "fwd", "logits": 1, "status": "accepted", "label": "draft 0", "payload": {"token": " and"}, "flops": 1196785664}, {"id": 36, "kind": "draft", "inputs": [35], "model": "hf://Qwen/Qwen3-0.6B", "tokens": 1, "attended": 22, "mode": "fwd", "logits": 1, "status": "accepted", "label": "draft 1", "payload": {"token": " they"}, "flops": 1197015040}, {"id": 37, "kind": "draft", "inputs": [36], "model": "hf://Qwen/Qwen3-0.6B", "tokens": 1, "attended": 23, "mode": "fwd", "logits": 1, "status": "rejected", "label": "draft 2", "payload": {"token": " use"}, "flops": 1197244416}, {"id": 38, "kind": "draft", "inputs": [37], "model": "hf://Qwen/Qwen3-0.6B", "tokens": 1, "attended": 24, "mode": "fwd", "logits": 1, "status": "rejected", "label": "draft 3", "payload": {"token": " it"}, "flops": 1197473792}, {"id": 39, "kind": "verify", "inputs": [35, 36, 37, 38], "model": "hf://Qwen/Qwen3-1.7B", "tokens": 5, "attended": 115, "mode": "fwd", "logits": 5, "status": "", "label": "verify", "payload": {"correction": " have", "num_accepted": 2}, "flops": 17230888960}, {"id": 40, "kind": "draft", "inputs": [39], "model": "hf://Qwen/Qwen3-0.6B", "tokens": 1, "attended": 24, "mode": "fwd", "logits": 1, "status": "accepted", "label": "draft 0", "payload": {"token": " to"}, "flops": 1197473792}, {"id": 41, "kind": "draft", "inputs": [40], "model": "hf://Qwen/Qwen3-0.6B", "tokens": 1, "attended": 25, "mode": "fwd", "logits": 1, "status": "accepted", "label": "draft 1", "payload": {"token": " make"}, "flops": 1197703168}, {"id": 42, "kind": "draft", "inputs": [41], "model": "hf://Qwen/Qwen3-0.6B", "tokens": 1, "attended": 26, "mode": "fwd", "logits": 1, "status": "accepted", "label": "draft 2", "payload": {"token": " a"}, "flops": 1197932544}, {"id": 43, "kind": "draft", "inputs": [42], "model": "hf://Qwen/Qwen3-0.6B", "tokens": 1, "attended": 27, "mode": "fwd", "logits": 1, "status": "accepted", "label": "draft 3", "payload": {"token": " decision"}, "flops": 1198161920}, {"id": 44, "kind": "verify", "inputs": [40, 41, 42, 43], "model": "hf://Qwen/Qwen3-1.7B", "tokens": 5, "attended": 130, "mode": "fwd", "logits": 5, "status": "", "label": "verify", "payload": {"correction": " about", "num_accepted": 4}, "flops": 17234329600}, {"id": 45, "kind": "draft", "inputs": [44], "model": "hf://Qwen/Qwen3-0.6B", "tokens": 1, "attended": 29, "mode": "fwd", "logits": 1, "status": "accepted", "label": "draft 0", "payload": {"token": " whether"}, "flops": 1198620672}, {"id": 46, "kind": "draft", "inputs": [45], "model": "hf://Qwen/Qwen3-0.6B", "tokens": 1, "attended": 30, "mode": "fwd", "logits": 1, "status": "accepted", "label": "draft 1", "payload": {"token": " to"}, "flops": 1198850048}, {"id": 47, "kind": "draft", "inputs": [46], "model": "hf://Qwen/Qwen3-0.6B", "tokens": 1, "attended": 31, "mode": "fwd", "logits": 1, "status": "rejected", "label": "draft 2", "payload": {"token": " use"}, "flops": 1199079424}, {"id": 48, "kind": "draft", "inputs": [47], "model": "hf://Qwen/Qwen3-0.6B", "tokens": 1, "attended": 32, "mode": "fwd", "logits": 1, "status": "rejected", "label": "draft 3", "payload": {"token": " it"}, "flops": 1199308800}, {"id": 49, "kind": "verify", "inputs": [45, 46, 47, 48], "model": "hf://Qwen/Qwen3-1.7B", "tokens": 5, "attended": 155, "mode": "fwd", "logits": 5, "status": "", "label": "verify", "payload": {"correction": " share", "num_accepted": 2}, "flops": 17240064000}], "edges": [{"src": 0, "dst": 1}, {"src": 1, "dst": 2}, {"src": 2, "dst": 3}, {"src": 0, "dst": 4}, {"src": 1, "dst": 4}, {"src": 2, "dst": 4}, {"src": 3, "dst": 4}, {"src": 4, "dst": 5}, {"src": 5, "dst": 6}, {"src": 6, "dst": 7}, {"src": 7, "dst": 8}, {"src": 5, "dst": 9}, {"src": 6, "dst": 9}, {"src": 7, "dst": 9}, {"src": 8, "dst": 9}, {"src": 9, "dst": 10}, {"src": 10, "dst": 11}, {"src": 11, "dst": 12}, {"src": 12, "dst": 13}, {"src": 10, "dst": 14}, {"src": 11, "dst": 14}, {"src": 12, "dst": 14}, {"src": 13, "dst": 14}, {"src": 14, "dst": 15}, {"src": 15, "dst": 16}, {"src": 16, "dst": 17}, {"src": 17, "dst": 18}, {"src": 15, "dst": 19}, {"src": 16, "dst": 19}, {"src": 17, "dst": 19}, {"src": 18, "dst": 19}, {"src": 19, "dst": 20}, {"src": 20, "dst": 21}, {"src": 21, "dst": 22}, {"src": 22, "dst": 23}, {"src": 20, "dst": 24}, {"src": 21, "dst": 24}, {"src": 22, "dst": 24}, {"src": 23, "dst": 24}, {"src": 24, "dst": 25}, {"src": 25, "dst": 26}, {"src": 26, "dst": 27}, {"src": 27, "dst": 28}, {"src": 25, "dst": 29}, {"src": 26, "dst": 29}, {"src": 27, "dst": 29}, {"src": 28, "dst": 29}, {"src": 29, "dst": 30}, {"src": 30, "dst": 31}, {"src": 31, "dst": 32}, {"src": 32, "dst": 33}, {"src": 30, "dst": 34}, {"src": 31, "dst": 34}, {"src": 32, "dst": 34}, {"src": 33, "dst": 34}, {"src": 34, "dst": 35}, {"src": 35, "dst": 36}, {"src": 36, "dst": 37}, {"src": 37, "dst": 38}, {"src": 35, "dst": 39}, {"src": 36, "dst": 39}, {"src": 37, "dst": 39}, {"src": 38, "dst": 39}, {"src": 39, "dst": 40}, {"src": 40, "dst": 41}, {"src": 41, "dst": 42}, {"src": 42, "dst": 43}, {"src": 40, "dst": 44}, {"src": 41, "dst": 44}, {"src": 42, "dst": 44}, {"src": 43, "dst": 44}, {"src": 44, "dst": 45}, {"src": 45, "dst": 46}, {"src": 46, "dst": 47}, {"src": 47, "dst": 48}, {"src": 45, "dst": 49}, {"src": 46, "dst": 49}, {"src": 47, "dst": 49}, {"src": 48, "dst": 49}], "shapes": {"hf://Qwen/Qwen3-0.6B": {"num_hidden_layers": 28, "hidden_size": 1024, "num_attention_heads": 16, "head_dim": 128, "num_key_value_heads": 8, "intermediate_size": 3072, "vocab_size": 151936}, "hf://Qwen/Qwen3-1.7B": {"num_hidden_layers": 28, "hidden_size": 2048, "num_attention_heads": 16, "head_dim": 128, "num_key_value_heads": 8, "intermediate_size": 6144, "vocab_size": 151936}}}, "training": {"nodes": [{"id": 0, "kind": "train_step", "inputs": [], "model": "Qwen/Qwen3-1.7B", "tokens": 32, "attended": 144, "mode": "lora_bwd", "logits": 32, "status": "", "label": "step 0", "payload": {"loss": 2.0}, "flops": 220316827648}, {"id": 1, "kind": "train_step", "inputs": [0], "model": "Qwen/Qwen3-1.7B", "tokens": 32, "attended": 144, "mode": "lora_bwd", "logits": 32, "status": "", "label": "step 1", "payload": {"loss": 1.6}, "flops": 220316827648}, {"id": 2, "kind": "eval_prefill", "inputs": [1], "model": "Qwen/Qwen3-1.7B", "tokens": 8, "attended": 36, "mode": "fwd", "logits": 1, "status": "", "label": "eval@2", "payload": {"checkpoint_digest": "sha256:step2", "metric": 1.6}, "flops": 23179165696}, {"id": 3, "kind": "eval_decode", "inputs": [2], "model": "Qwen/Qwen3-1.7B", "tokens": 1, "attended": 9, "mode": "fwd", "logits": 1, "status": "", "label": "eval_decode", "payload": {"phase": "eval", "step": 2}, "flops": 3442966528}, {"id": 4, "kind": "eval_decode", "inputs": [3], "model": "Qwen/Qwen3-1.7B", "tokens": 1, "attended": 10, "mode": "fwd", "logits": 1, "status": "", "label": "eval_decode", "payload": {"phase": "eval", "step": 2}, "flops": 3443195904}, {"id": 5, "kind": "eval_decode", "inputs": [4], "model": "Qwen/Qwen3-1.7B", "tokens": 1, "attended": 11, "mode": "fwd", "logits": 1, "status": "", "label": "eval_decode", "payload": {"phase": "eval", "step": 2}, "flops": 3443425280}, {"id": 6, "kind": "train_step", "inputs": [1], "model": "Qwen/Qwen3-1.7B", "tokens": 32, "attended": 144, "mode": "lora_bwd", "logits": 32, "status": "", "label": "step 2", "payload": {"loss": 1.3}, "flops": 220316827648}, {"id": 7, "kind": "train_step", "inputs": [6], "model": "Qwen/Qwen3-1.7B", "tokens": 32, "attended": 144, "mode": "lora_bwd", "logits": 32, "status": "", "label": "step 3", "payload": {"loss": 1.1}, "flops": 220316827648}, {"id": 8, "kind": "eval_prefill", "inputs": [7], "model": "Qwen/Qwen3-1.7B", "tokens": 8, "attended": 36, "mode": "fwd", "logits": 1, "status": "", "label": "eval@4", "payload": {"checkpoint_digest": "sha256:step4", "metric": 1.1}, "flops": 23179165696}, {"id": 9, "kind": "eval_decode", "inputs": [8], "model": "Qwen/Qwen3-1.7B", "tokens": 1, "attended": 9, "mode": "fwd", "logits": 1, "status": "", "label": "eval_decode", "payload": {"phase": "eval", "step": 4}, "flops": 3442966528}, {"id": 10, "kind": "eval_decode", "inputs": [9], "model": "Qwen/Qwen3-1.7B", "tokens": 1, "attended": 10, "mode": "fwd", "logits": 1, "status": "", "label": "eval_decode", "payload": {"phase": "eval", "step": 4}, "flops": 3443195904}, {"id": 11, "kind": "eval_decode", "inputs": [10], "model": "Qwen/Qwen3-1.7B", "tokens": 1, "attended": 11, "mode": "fwd", "logits": 1, "status": "", "label": "eval_decode", "payload": {"phase": "eval", "step": 4}, "flops": 3443425280}, {"id": 12, "kind": "train_step", "inputs": [7], "model": "Qwen/Qwen3-1.7B", "tokens": 32, "attended": 144, "mode": "lora_bwd", "logits": 32, "status": "", "label": "step 4", "payload": {"loss": 0.95}, "flops": 220316827648}, {"id": 13, "kind": "train_step", "inputs": [12], "model": "Qwen/Qwen3-1.7B", "tokens": 32, "attended": 144, "mode": "lora_bwd", "logits": 32, "status": "", "label": "step 5", "payload": {"loss": 0.9}, "flops": 220316827648}, {"id": 14, "kind": "eval_prefill", "inputs": [13], "model": "Qwen/Qwen3-1.7B", "tokens": 8, "attended": 36, "mode": "fwd", "logits": 1, "status": "", "label": "eval@6", "payload": {"checkpoint_digest": "sha256:step6", "metric": 0.9}, "flops": 23179165696}, {"id": 15, "kind": "eval_decode", "inputs": [14], "model": "Qwen/Qwen3-1.7B", "tokens": 1, "attended": 9, "mode": "fwd", "logits": 1, "status": "", "label": "eval_decode", "payload": {"phase": "eval", "step": 6}, "flops": 3442966528}, {"id": 16, "kind": "eval_decode", "inputs": [15], "model": "Qwen/Qwen3-1.7B", "tokens": 1, "attended": 10, "mode": "fwd", "logits": 1, "status": "", "label": "eval_decode", "payload": {"phase": "eval", "step": 6}, "flops": 3443195904}, {"id": 17, "kind": "eval_decode", "inputs": [16], "model": "Qwen/Qwen3-1.7B", "tokens": 1, "attended": 11, "mode": "fwd", "logits": 1, "status": "", "label": "eval_decode", "payload": {"phase": "eval", "step": 6}, "flops": 3443425280}], "edges": [{"src": 0, "dst": 1}, {"src": 1, "dst": 2}, {"src": 2, "dst": 3}, {"src": 3, "dst": 4}, {"src": 4, "dst": 5}, {"src": 1, "dst": 6}, {"src": 6, "dst": 7}, {"src": 7, "dst": 8}, {"src": 8, "dst": 9}, {"src": 9, "dst": 10}, {"src": 10, "dst": 11}, {"src": 7, "dst": 12}, {"src": 12, "dst": 13}, {"src": 13, "dst": 14}, {"src": 14, "dst": 15}, {"src": 15, "dst": 16}, {"src": 16, "dst": 17}], "shapes": {"Qwen/Qwen3-1.7B": {"num_hidden_layers": 28, "hidden_size": 2048, "num_attention_heads": 16, "head_dim": 128, "num_key_value_heads": 8, "intermediate_size": 6144, "vocab_size": 151936}}}, "coding": {"nodes": [{"id": 0, "kind": "prompt", "inputs": [], "model": "agent", "tokens": 40, "attended": 0, "mode": "fwd", "logits": 0, "status": "", "label": "prompt", "payload": {"text": "Summarize a paper that just came out, then implement it"}, "flops": 2496449740800}, {"id": 1, "kind": "search", "inputs": [0], "model": "agent", "tokens": 620, "attended": 0, "mode": "fwd", "logits": 0, "status": "", "label": "search papers", "payload": {}, "flops": 38694970982400}, {"id": 2, "kind": "search", "inputs": [0], "model": "agent", "tokens": 640, "attended": 0, "mode": "fwd", "logits": 0, "status": "", "label": "search truncation samplers", "payload": {}, "flops": 39943195852800}, {"id": 3, "kind": "fetch", "inputs": [0], "model": "agent", "tokens": 1100, "attended": 0, "mode": "fwd", "logits": 0, "status": "", "label": "fetch arXiv abstract", "payload": {}, "flops": 68652367872000}, {"id": 4, "kind": "fetch", "inputs": [0], "model": "agent", "tokens": 6300, "attended": 0, "mode": "fwd", "logits": 0, "status": "", "label": "fetch arXiv full", "payload": {}, "flops": 393190834176000}, {"id": 5, "kind": "fetch", "inputs": [0], "model": "agent", "tokens": 1800, "attended": 0, "mode": "fwd", "logits": 0, "status": "", "label": "fetch repo", "payload": {}, "flops": 112340238336000}, {"id": 6, "kind": "fetch", "inputs": [0], "model": "agent", "tokens": 1500, "attended": 0, "mode": "fwd", "logits": 0, "status": "", "label": "fetch reference code", "payload": {}, "flops": 93616865280000}, {"id": 7, "kind": "plan", "inputs": [1, 2, 3, 4, 5, 6], "model": "agent", "tokens": 2900, "attended": 0, "mode": "fwd", "logits": 0, "status": "", "label": "extract p-less algorithm", "payload": {}, "flops": 180992606208000}, {"id": 8, "kind": "codegen", "inputs": [7], "model": "agent", "tokens": 1200, "attended": 0, "mode": "fwd", "logits": 0, "status": "", "label": "write p_less.py", "payload": {}, "flops": 74893492224000}, {"id": 9, "kind": "codegen", "inputs": [7], "model": "agent", "tokens": 1400, "attended": 0, "mode": "fwd", "logits": 0, "status": "", "label": "write test_p_less.py", "payload": {}, "flops": 87375740928000}, {"id": 10, "kind": "test", "inputs": [8, 9], "model": "agent", "tokens": 400, "attended": 0, "mode": "fwd", "logits": 0, "status": "", "label": "run tests -> 9 passed", "payload": {}, "flops": 24964497408000}], "edges": [{"src": 0, "dst": 1}, {"src": 0, "dst": 2}, {"src": 0, "dst": 3}, {"src": 0, "dst": 4}, {"src": 0, "dst": 5}, {"src": 0, "dst": 6}, {"src": 1, "dst": 7}, {"src": 2, "dst": 7}, {"src": 3, "dst": 7}, {"src": 4, "dst": 7}, {"src": 5, "dst": 7}, {"src": 6, "dst": 7}, {"src": 7, "dst": 8}, {"src": 7, "dst": 9}, {"src": 8, "dst": 10}, {"src": 9, "dst": 10}], "shapes": {"agent": {"num_hidden_layers": 64, "hidden_size": 5120, "num_attention_heads": 40, "head_dim": 128, "num_key_value_heads": 8, "intermediate_size": 27648, "vocab_size": 151936}}}};
 
 const SVGNS = "http://www.w3.org/2000/svg";
 const el = (n, a={}, kids=[]) => {
@@ -136,9 +134,6 @@ function fmtFlops(n) {
   while (n >= 1000 && i < u.length-1) { n /= 1000; i++; }
   return (n < 10 ? n.toFixed(2) : n.toFixed(1)) + " " + u[i];
 }
-const decode = (ids, vocab) => ids.map(i => vocab[i] ?? "·").join("");
-
-// ---- shared node card ----
 function card(x, y, w, h, color, lines, tip) {
   const g = el("g", { class: "card", transform: `translate(${x},${y})` });
   g.appendChild(el("rect", { x:0, y:0, width:w, height:h, rx:9,
@@ -153,16 +148,11 @@ function card(x, y, w, h, color, lines, tip) {
   if (tip) bindTip(g, tip);
   return g;
 }
-// ---- flops bar at bottom of a card ----
 function flopsBar(w, h, frac, color) {
   const g = el("g");
-  g.appendChild(el("rect", { x:14, y:h-14, width:w-28, height:5, rx:2.5, fill:"#2d333b" }));
-  g.appendChild(el("rect", { x:14, y:h-14, width:Math.max(3,(w-28)*frac), height:5, rx:2.5, fill:color }));
+  g.appendChild(el("rect", { x:14, y:h-13, width:w-28, height:5, rx:2.5, fill:"#2d333b" }));
+  g.appendChild(el("rect", { x:14, y:h-13, width:Math.max(3,(w-28)*frac), height:5, rx:2.5, fill:color }));
   return g;
-}
-function arrow(x1,y1,x2,y2,color,dashed) {
-  return el("path", { d:`M${x1},${y1} L${x2},${y2}`, stroke:color, "stroke-width":1.6,
-    fill:"none", "marker-end":"url(#arr)", ...(dashed?{ "stroke-dasharray":"5 4" }:{}) });
 }
 function defs() {
   const d = el("defs");
@@ -172,320 +162,139 @@ function defs() {
   d.appendChild(m);
   return d;
 }
-
-// ---- tooltip ----
 const tip = document.getElementById("tip");
 function bindTip(node, html) {
   node.addEventListener("mousemove", e => {
     tip.innerHTML = html; tip.style.opacity = 1;
     const pad = 14;
     let x = e.clientX + pad, y = e.clientY + pad;
-    if (x + 330 > innerWidth) x = e.clientX - 330;
+    if (x + 350 > innerWidth) x = e.clientX - 350;
     tip.style.left = x + "px"; tip.style.top = y + "px";
   });
   node.addEventListener("mouseleave", () => { tip.style.opacity = 0; });
 }
 
 // =====================================================================
-// Inference chain
+// ONE generic renderer: lay out any canonical graph as a layered DAG.
+// Layer = longest path from a root (node with no incoming edge); nodes in a
+// layer stack vertically. This draws a chain, a fan-in, a branch, or a diamond
+// from the same code.
 // =====================================================================
-function renderInference(host, meta) {
-  const g = DATA.inference, tasks = g.tasks, vocab = g.vocab;
-  const maxF = Math.max(...tasks.map(t => t.flops));
-  const W = 168, H = 78, GAP = 56, PADX = 36, PADY = 60;
-  const svgW = PADX*2 + tasks.length*W + (tasks.length-1)*GAP;
-  const svg = el("svg", { width: svgW, height: 220, viewBox:`0 0 ${svgW} 220` });
-  svg.appendChild(defs());
+const KIND_COLOR = {
+  prefill:"var(--prefill)", decode:"var(--decode)",
+  train_step:"var(--train)", eval_prefill:"var(--eval)", eval_decode:"#56d4dd",
+  draft:"var(--eval)", verify:"var(--train)",
+  prompt:"#d2a8ff", search:"var(--decode)", fetch:"#56d4dd",
+  plan:"var(--train)", codegen:"var(--prefill)", test:"var(--eval)",
+};
+const REJ = "#f85149";
+const esc = s => String(s).replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
 
-  const xOf = i => PADX + i*(W+GAP);
-  // edges first
-  tasks.forEach(t => {
-    if (t.next != null) {
-      const i = tasks.findIndex(x=>x.id===t.id), j = tasks.findIndex(x=>x.id===t.next);
-      svg.appendChild(arrow(xOf(i)+W, PADY+H/2, xOf(j), PADY+H/2, "var(--edge)"));
-    }
-  });
-  // nodes
-  tasks.forEach((t, i) => {
-    const color = t.kind === "prefill" ? "var(--prefill)" : "var(--decode)";
-    const tok = vocab[t.output_token] ?? "·";
-    const title = t.kind === "prefill" ? "PREFILL" : `DECODE #${i}`;
-    const c = card(xOf(i), PADY, W, H, color, [
-      title,
-      { t: `→ "${tok.replace(/\s/g,"·")}"` },
-      { t: fmtFlops(t.flops), muted:true },
-    ], `<b>${title}</b><br><span class="k">emits token:</span> "${tok}"<br>
-        <span class="k">context in (${t.prompt.length} tok):</span> "${decode(t.prompt,vocab)}"<br>
-        <span class="k">flops:</span> ${t.flops.toLocaleString()} (${fmtFlops(t.flops)})<br>
-        <span class="k">next:</span> ${t.next==null?"— (end)":"task "+t.next}`);
-    c.appendChild(flopsBar(W, H, t.flops/maxF, color));
-    svg.appendChild(c);
-  });
-  host.innerHTML = ""; host.appendChild(svg);
-  meta.textContent = `model ${g.model_source} · ${tasks.length} tasks · prefill is `
-    + (maxF / tasks[1].flops).toFixed(1) + "× the cost of one decode step";
+function nodeColor(n) {
+  return (n.kind === "draft" && n.status === "rejected") ? REJ
+       : (KIND_COLOR[n.kind] || "var(--edge)");
 }
 
-// =====================================================================
-// Training DAG: spine + eval branches (each nesting an inference graph)
-// =====================================================================
-function renderTraining(host, meta) {
-  const g = DATA.training, nodes = g.nodes;
-  const spine = nodes.filter(n => n.kind === "train_step");
-  const evals = nodes.filter(n => n.kind === "eval");
+function edgeStyle(src, dst) {
+  if (src.kind === "draft" && src.status === "rejected")
+    return { color: REJ, dashed: true, width: 1.2, opacity: 0.6, head: false };
+  if (src.kind === "draft" && dst.kind === "verify")
+    return { color: "var(--edge)", width: 1, opacity: 0.30, head: false };  // fan-in
+  if (src.kind === "verify" && dst.kind === "draft")
+    return { color: "var(--eval)", width: 1.6, opacity: 1, head: true };     // handoff
+  return { color: nodeColor(src), width: 1.6, opacity: 1, head: true };
+}
+
+function renderGraph(graph, host, meta, caption) {
+  const nodes = graph.nodes.slice().sort((a, b) => a.id - b.id);
+  const edges = graph.edges || [];
   const byId = Object.fromEntries(nodes.map(n => [n.id, n]));
-  const maxF = Math.max(...spine.map(n => n.flops));
+  const incoming = {}; nodes.forEach(n => incoming[n.id] = []);
+  edges.forEach(e => incoming[e.dst].push(e.src));
 
-  const W=152, H=80, GAP=46, PADX=36, SPINE_Y=44;
-  const EVAL_Y=210, EW=190, EH=70, NEST_Y=320;
-  const svgW = PADX*2 + spine.length*W + (spine.length-1)*GAP;
-  const svg = el("svg", { width: svgW, height: 440, viewBox:`0 0 ${svgW} 440` });
+  // longest-path layer (ids are DAG-ordered: every src < dst).
+  const layer = {};
+  nodes.forEach(n => {
+    const inc = incoming[n.id];
+    layer[n.id] = inc.length ? Math.max(...inc.map(s => layer[s])) + 1 : 0;
+  });
+  const rowOf = {}, perLayer = {};
+  nodes.forEach(n => {
+    const L = layer[n.id];
+    perLayer[L] = perLayer[L] || 0;
+    rowOf[n.id] = perLayer[L]++;
+  });
+
+  const CW = 188, CH = 56, COLGAP = 64, ROWGAP = 16, PADX = 30, TOP = 26;
+  const maxLayer = Math.max(...nodes.map(n => layer[n.id]), 0);
+  const maxRows = Math.max(...Object.values(perLayer), 1);
+  const X = id => PADX + layer[id] * (CW + COLGAP);
+  const Y = id => TOP + rowOf[id] * (CH + ROWGAP);
+  const svgW = PADX + (maxLayer + 1) * (CW + COLGAP);
+  const svgH = TOP + maxRows * (CH + ROWGAP) + TOP;
+  const maxF = Math.max(...nodes.map(n => n.flops), 1);
+
+  const svg = el("svg", { width: svgW, height: svgH, viewBox: `0 0 ${svgW} ${svgH}` });
   svg.appendChild(defs());
-  const xOf = i => PADX + i*(W+GAP);
 
-  // spine edges
-  spine.forEach((n,i) => {
-    if (n.next != null && byId[n.next]) {
-      const j = spine.findIndex(x=>x.id===n.next);
-      svg.appendChild(arrow(xOf(i)+W, SPINE_Y+H/2, xOf(j), SPINE_Y+H/2, "var(--edge)"));
-    }
+  // edges first
+  edges.forEach(e => {
+    const s = byId[e.src], d = byId[e.dst];
+    const st = edgeStyle(s, d);
+    svg.appendChild(el("path", {
+      d: `M${X(e.src) + CW},${Y(e.src) + CH / 2} L${X(e.dst)},${Y(e.dst) + CH / 2}`,
+      stroke: st.color, "stroke-width": st.width, fill: "none", opacity: st.opacity,
+      ...(st.dashed ? { "stroke-dasharray": "5 4" } : {}),
+      ...(st.head ? { "marker-end": "url(#arr)" } : {}),
+    }));
   });
 
-  // eval branches + nested inference graphs
-  let evIdx = 0;
-  spine.forEach((n,i) => {
-    n.branches.forEach(bid => {
-      const ev = byId[bid];
-      const ex = xOf(i) + W/2 - EW/2 + (evIdx? 0:0);
-      const eyTop = EVAL_Y;
-      // dashed checkpoint edge
-      svg.appendChild(arrow(xOf(i)+W/2, SPINE_Y+H, xOf(i)+W/2, eyTop, "var(--eval)", true));
-      svg.appendChild(el("text", { x:xOf(i)+W/2+8, y:(SPINE_Y+H+eyTop)/2, class:"badge", fill:"var(--eval)" },
-        "ckpt " + (n.checkpoint_digest||"")));
-      // eval card
-      const ec = card(ex, eyTop, EW, EH, "var(--eval)", [
-        `EVAL @ step ${ev.step}`,
-        { t: `metric ${ev.eval_metric}  ·  forward-only` },
-        { t: fmtFlops(ev.flops), muted:true },
-      ], `<b>EVAL @ step ${ev.step}</b><br><span class="k">runs the checkpoint adapter over the eval set</span><br>
-          <span class="k">metric:</span> ${ev.eval_metric}<br>
-          <span class="k">flops:</span> ${fmtFlops(ev.flops)} (sum of nested forward passes)<br>
-          <span class="k">expands into:</span> the inference graph below`);
-      svg.appendChild(ec);
-
-      // nested inference graph (mini chain) under the eval card
-      const sub = ev.eval_graph, st = sub.tasks, sv = sub.vocab;
-      const nx0 = ex + 8, nw = 80, ngap = 22, ny = NEST_Y;
-      svg.appendChild(arrow(ex+EW/2, eyTop+EH, ex+EW/2, ny-6, "var(--edge)", true));
-      st.forEach((t,k) => {
-        const col = t.kind==="prefill" ? "var(--prefill)" : "var(--decode)";
-        const cx = nx0 + k*(nw+ngap);
-        if (k>0) svg.appendChild(arrow(cx-ngap, ny+16, cx, ny+16, "var(--edge)"));
-        const mc = card(cx, ny, nw, 38, col, [
-          t.kind==="prefill"?"prefill":"decode",
-          { t: fmtFlops(t.flops), muted:true },
-        ], `<b>nested ${t.kind}</b><br><span class="k">emits:</span> "${sv[t.output_token]}"<br>
-            <span class="k">flops:</span> ${fmtFlops(t.flops)}`);
-        svg.appendChild(mc);
-      });
-      evIdx++;
-    });
-  });
-
-  // spine nodes (drawn last, on top)
-  spine.forEach((n,i) => {
-    const c = card(xOf(i), SPINE_Y, W, H, "var(--train)", [
-      `STEP ${n.step}`,
-      { t: `loss ${n.loss}` },
-      { t: fmtFlops(n.flops), muted:true },
-    ], `<b>TRAIN STEP ${n.step}</b><br><span class="k">forward + backward + optimizer update</span><br>
-        <span class="k">loss:</span> ${n.loss}<br>
-        <span class="k">flops:</span> ${fmtFlops(n.flops)}<br>
-        ${n.checkpoint_digest?`<span class="k">checkpoint:</span> ${n.checkpoint_digest} → eval`:`<span class="k">(no checkpoint materialized here)</span>`}`);
-    c.appendChild(flopsBar(W, H, n.flops/maxF, "var(--train)"));
-    if (n.checkpoint_digest)
-      c.appendChild(el("circle", { cx:W-12, cy:12, r:5, fill:"var(--eval)" }));
+  // nodes on top
+  nodes.forEach(n => {
+    const color = nodeColor(n);
+    const mark = n.status === "rejected" ? "✗ " : (n.kind === "test" || n.kind === "verify" ? "✓ " : "");
+    const label = (n.label || n.kind).slice(0, 24);
+    const c = card(X(n.id), Y(n.id), CW, CH, color, [
+      mark + n.kind,
+      { t: label, muted: true },
+      { t: fmtFlops(n.flops), muted: true },
+    ], nodeTip(n));
+    c.appendChild(flopsBar(CW, CH, n.flops / maxF, color));
     svg.appendChild(c);
   });
 
   host.innerHTML = ""; host.appendChild(svg);
-  meta.textContent = `model ${g.model_source} · ${spine.length} train steps + ${evals.length} evals = ${nodes.length} nodes · `
-    + `one train step ≈ ${(maxF/evals[0].flops).toFixed(1)}× one eval`;
+
+  const total = nodes.reduce((a, n) => a + n.flops, 0);
+  meta.innerHTML = `${caption} · ${nodes.length} tasks · ${edges.length} edges · `
+    + `total ≈ ${fmtFlops(total)}`;
+}
+
+function nodeTip(n) {
+  const p = n.payload || {};
+  const rows = Object.entries(p).map(([k, v]) =>
+    `<span class="k">${esc(k)}:</span> ${esc(typeof v === "string" ? v.slice(0, 120) : v)}`).join("<br>");
+  return `<b>${esc(n.kind)}</b>${n.status ? " · " + esc(n.status) : ""}<br>`
+    + `<span class="k">cost:</span> ${fmtFlops(n.flops)} (${n.tokens} tok)<br>`
+    + (rows || "");
 }
 
 // ---- tabs ----
 document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () => {
-  document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));
-  document.querySelectorAll(".scene").forEach(x=>x.classList.remove("active"));
+  document.querySelectorAll(".tab").forEach(x => x.classList.remove("active"));
+  document.querySelectorAll(".scene").forEach(x => x.classList.remove("active"));
   t.classList.add("active");
   document.getElementById(t.dataset.scene).classList.add("active");
 }));
 
-// =====================================================================
-// Speculative decoding: per-round draft chains fanning into a verify pass
-// =====================================================================
-function renderSpec(host, meta) {
-  const g = DATA.spec, nodes = g.nodes, edges = g.edges || [];
-  const byId = Object.fromEntries(nodes.map(n => [n.id, n]));
-  const rounds = Math.max(...nodes.map(n => n.round)) + 1;
-  const maxF = Math.max(...nodes.map(n => n.flops));
-  const REJ = "#f85149", clip = s => (s||"").replace(/\s/g,"·").slice(0,8);
-
-  const DW=66, DH=44, DGAP=12, TOP=46, VY=176, VW=96, VH=58, BLOCK_GAP=62, PADX=36;
-  const maxK = Math.max(...Array.from({length: rounds}, (_, r) =>
-    nodes.filter(n => n.round === r && n.kind === "draft").length));
-  const BLOCK_W = maxK*DW + (maxK-1)*DGAP;
-  const svgW = PADX*2 + rounds*BLOCK_W + (rounds-1)*BLOCK_GAP;
-  const svgH = VY + VH + 36;
-
-  // lay out every node: drafts in a row, the verify node centred below them.
-  const pos = {};
-  for (let r = 0; r < rounds; r++) {
-    const x0 = PADX + r*(BLOCK_W + BLOCK_GAP);
-    nodes.filter(n => n.round===r && n.kind==="draft").sort((a,b)=>a.pos_in_round-b.pos_in_round)
-         .forEach((n,i) => { pos[n.id] = {x:x0+i*(DW+DGAP), y:TOP, w:DW, h:DH}; });
-    const v = nodes.find(n => n.round===r && n.kind==="verify");
-    pos[v.id] = {x:x0 + BLOCK_W/2 - VW/2, y:VY, w:VW, h:VH};
-  }
-  const cy = id => pos[id].y + pos[id].h/2;
-
-  const svg = el("svg", { width: svgW, height: svgH, viewBox:`0 0 ${svgW} ${svgH}` });
-  svg.appendChild(defs());
-
-  // edges
-  edges.forEach(e => {
-    const s = byId[e.src], d = byId[e.dst], ps = pos[e.src], pd = pos[e.dst];
-    if (e.kind === "verify_in") {                 // every draft fans into the verify pass
-      svg.appendChild(el("path", { d:`M${ps.x+ps.w/2},${ps.y+ps.h} L${pd.x+pd.w/2},${pd.y}`,
-        stroke:"var(--edge)", "stroke-width":1, fill:"none", opacity:.30 }));
-    } else if (e.kind === "draft") {              // draft autoregression d_i -> d_{i+1}
-      const rej = s.status==="rejected" || d.status==="rejected";
-      svg.appendChild(arrow(ps.x+ps.w, cy(e.src), pd.x, cy(e.dst), rej?REJ:"var(--eval)", rej));
-    } else if (e.kind === "commit") {             // verify_r -> next round's first draft
-      svg.appendChild(arrow(ps.x+ps.w, cy(e.src), pd.x, cy(e.dst), "var(--eval)"));
-    }
-  });
-
-  // round labels
-  for (let r = 0; r < rounds; r++) {
-    const v = nodes.find(n => n.round===r && n.kind==="verify");
-    const a = nodes.filter(n => n.round===r && n.status==="accepted").length;
-    const k = nodes.filter(n => n.round===r && n.kind==="draft").length;
-    svg.appendChild(el("text", { x:pos[v.id].x+VW/2, y:VY+VH+20, "text-anchor":"middle",
-      class:"badge", fill:"var(--dim)" }, `round ${r} · ${a}/${k} kept`));
-  }
-
-  // draft cards
-  nodes.filter(n => n.kind==="draft").forEach(n => {
-    const acc = n.status==="accepted", col = acc ? "var(--eval)" : REJ, p = pos[n.id];
-    const c = card(p.x, p.y, p.w, p.h, col, [
-      `${acc?"✓":"✗"} "${clip(n.token)}"`,
-      { t: fmtFlops(n.flops), muted:true },
-    ], `<b>${acc?"accepted":"rejected"} draft</b> (round ${n.round}, pos ${n.pos_in_round})<br>
-        <span class="k">proposed:</span> "${n.token}"<br><span class="k">flops:</span> ${fmtFlops(n.flops)} (draft model)<br>
-        ${acc ? '<span class="k">target agreed → committed</span>'
-              : '<span class="k">ingested by the verify pass, then discarded</span>'}`);
-    if (!acc) c.querySelector("rect").setAttribute("opacity", ".5");
-    svg.appendChild(c);
-  });
-
-  // verify cards on top
-  nodes.filter(n => n.kind==="verify").forEach(n => {
-    const p = pos[n.id], k = nodes.filter(x => x.round===n.round && x.kind==="draft").length;
-    const c = card(p.x, p.y, p.w, p.h, "var(--train)", [
-      "VERIFY",
-      { t:`+"${clip(n.token)}"` },
-      { t: fmtFlops(n.flops), muted:true },
-    ], `<b>VERIFY (target)</b> round ${n.round}<br><span class="k">one parallel pass; ingests all ${k} drafts</span><br>
-        <span class="k">emits correction:</span> "${n.token}"<br><span class="k">flops:</span> ${fmtFlops(n.flops)}`);
-    c.appendChild(flopsBar(p.w, p.h, n.flops/maxF, "var(--train)"));
-    svg.appendChild(c);
-  });
-
-  host.innerHTML = ""; host.appendChild(svg);
-
-  const drafts = nodes.filter(n=>n.kind==="draft").length;
-  const acc = nodes.filter(n=>n.status==="accepted").length;
-  const verifies = nodes.filter(n=>n.kind==="verify").length;
-  const committed = acc + verifies;
-  const out = [];
-  for (let r=0; r<rounds; r++) {
-    nodes.filter(n=>n.round===r && n.status==="accepted").sort((a,b)=>a.pos_in_round-b.pos_in_round)
-         .forEach(n => out.push(n.token));
-    out.push(nodes.find(n=>n.round===r && n.kind==="verify").token);
-  }
-  meta.innerHTML = `<b>REAL run on H100</b> · draft ${g.draft_model} + target ${g.target_model} · prompt "${g.prompt||""}"<br>`
-    + `→ "${out.join("")}"<br>`
-    + `${rounds} rounds · ${drafts} drafts (${acc} accepted / ${drafts-acc} rejected) · `
-    + `${committed} tokens committed in ${verifies} target passes ≈ ${(committed/verifies).toFixed(2)}× tokens / target pass`;
-}
-
-// =====================================================================
-// Coding agent: retrieval -> plan -> codegen -> verify diamond
-// =====================================================================
-function renderCoding(host, meta) {
-  const g = DATA.coding, nodes = g.nodes, edges = g.edges || [];
-  const COLOR = { prompt:"#d2a8ff", search:"var(--decode)", fetch:"#56d4dd",
-                  plan:"var(--train)", codegen:"var(--prefill)", verify:"var(--eval)" };
-  const maxF = Math.max(...nodes.map(n => n.flops));
-  const CW=228, CH=58, ROWGAP=12, PADX=36, TOP=26, COLGAP=86;
-  const colX = c => PADX + c*(CW + COLGAP);
-
-  // columns: 0 prompt, 1 retrievals, 2 plan, 3 codegen, 4 verify
-  const promptN = nodes.find(n => n.kind==="prompt");
-  const retr = nodes.filter(n => n.kind==="search" || n.kind==="fetch");
-  const plan = nodes.find(n => n.kind==="plan");
-  const cg = nodes.filter(n => n.kind==="codegen");
-  const verify = nodes.find(n => n.kind==="verify");
-
-  const pos = {};
-  retr.forEach((n,i) => { pos[n.id] = {x:colX(1), y:TOP + i*(CH+ROWGAP)}; });
-  const colH = retr.length*(CH+ROWGAP) - ROWGAP;
-  const midY = TOP + colH/2 - CH/2;
-  pos[promptN.id] = {x:colX(0), y:midY};
-  pos[plan.id] = {x:colX(2), y:midY};
-  const cgH = cg.length*(CH+ROWGAP) - ROWGAP;
-  cg.forEach((n,i) => { pos[n.id] = {x:colX(3), y:TOP + colH/2 - cgH/2 + i*(CH+ROWGAP)}; });
-  pos[verify.id] = {x:colX(4), y:midY};
-
-  const svgW = colX(4) + CW + PADX, svgH = TOP + colH + 30;
-  const svg = el("svg", { width:svgW, height:svgH, viewBox:`0 0 ${svgW} ${svgH}` });
-  svg.appendChild(defs());
-
-  const cy = id => pos[id].y + CH/2;
-  edges.forEach(e => {
-    const a = pos[e.src], b = pos[e.dst];
-    const color = e.kind==="prompts" ? "#d2a8ff" : e.kind==="informs" ? "var(--edge)"
-                : e.kind==="plans" ? "var(--train)" : "var(--eval)";
-    svg.appendChild(arrow(a.x+CW, cy(e.src), b.x, cy(e.dst), color));
-  });
-
-  nodes.forEach(n => {
-    const p = pos[n.id], color = COLOR[n.kind] || "var(--edge)";
-    const title = (n.kind==="verify" ? "✓ " : "") + n.kind.toUpperCase();
-    const c = card(p.x, p.y, CW, CH, color, [
-      title,
-      { t: (n.output||n.prompt||"").slice(0, 34), muted:true },
-      { t: fmtFlops(n.flops) + ` · ${n.tokens} tok`, muted:true },
-    ], `<b>${n.kind.toUpperCase()}</b><br><span class="k">in:</span> ${n.prompt||"—"}<br>
-        <span class="k">out:</span> ${n.output||"—"}<br>
-        <span class="k">cost:</span> ${fmtFlops(n.flops)} (${n.tokens} tokens)`);
-    c.appendChild(flopsBar(CW, CH, n.flops/maxF, color));
-    svg.appendChild(c);
-  });
-
-  host.innerHTML = ""; host.appendChild(svg);
-  const nf = retr.length, total = nodes.reduce((s,n)=>s+n.flops,0);
-  meta.innerHTML = `<b>REAL agent run</b> · prompt: "${g.goal}"<br>`
-    + `prompt → ${nf} retrievals → plan → ${cg.length} codegen → verify: `
-    + `<b style="color:var(--eval)">${verify.output}</b> · total ≈ ${fmtFlops(total)} `
-    + `(cost ∝ tokens, assuming a ${(32).toString()}B agent)`;
-}
-
-renderInference(document.getElementById("inf-host"), document.getElementById("inf-meta"));
-renderTraining(document.getElementById("trn-host"), document.getElementById("trn-meta"));
-renderSpec(document.getElementById("spec-host"), document.getElementById("spec-meta"));
-renderCoding(document.getElementById("cod-host"), document.getElementById("cod-meta"));
+renderGraph(DATA.inference, document.getElementById("inf-host"),
+            document.getElementById("inf-meta"), "Inference — greedy decode chain");
+renderGraph(DATA.training, document.getElementById("trn-host"),
+            document.getElementById("trn-meta"), "LoRA training (stub) — spine + eval branches");
+renderGraph(DATA.spec, document.getElementById("spec-host"),
+            document.getElementById("spec-meta"), "Speculative decoding (real H100) — drafts fan into verify");
+renderGraph(DATA.coding, document.getElementById("cod-host"),
+            document.getElementById("cod-meta"), "Coding agent (stub) — search→plan→codegen→verify");
 </script>
 </body>
 </html>
