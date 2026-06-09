@@ -42,10 +42,12 @@ export default function GraphView({ graph, caption }) {
             nodeTypes={nodeTypes}
             fitView
             fitViewOptions={{ padding: 0.15, maxZoom: 1.4 }}
-            minZoom={0.1}
+            minZoom={0.02}
             proOptions={{ hideAttribution: true }}
             nodesDraggable={false}
             nodesConnectable={false}
+            onlyRenderVisibleElements
+            elevateNodesOnSelect={false}
           >
             <Background color="#21262d" gap={22} />
             <Controls showInteractive={false} />

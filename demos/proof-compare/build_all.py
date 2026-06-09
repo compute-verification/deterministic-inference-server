@@ -58,21 +58,27 @@ def _training_trace() -> dict:
 
 def _coding_trace() -> dict:
     # Forward-pass-granular trace of the real p-less implementation run (STUB:
-    # token counts are estimates; see demos/coding-agent). Each turn = one
-    # prefill (prompt or tool output) + one decode per generated token; tool
-    # calls (search/fetch/run-tests) are not forward passes, so they appear only
-    # as the `via` tag + token count of the prefill that ingests their output.
+    # token counts are estimates from that run; see demos/coding-agent). Each
+    # turn = one prefill over the tokens READ this turn (the prompt, or a tool's
+    # output) + one decode per GENERATED token. Tool calls (search/fetch/run-
+    # tests) are not forward passes, so they appear only as the `via` tag +
+    # prefill size of the turn that ingests their output. Counts are REALISTIC
+    # (not shrunk for display): a real run of this task is several thousand
+    # generated tokens, so the graph is several thousand decode nodes -- that is
+    # the honest cost of "one node = one forward pass." prefill = bytes read
+    # (search hits, fetched paper/repo, test output); gen = tokens written
+    # (reasoning, the extracted plan, the two source files, the summary).
     return t_code.trace_coding_stub(
         "agent",
         prompt="Summarize a paper that just came out, then implement it",
         turns=[
-            {"role": "reason",  "prefill": 40,   "gen": 6,  "label": "read prompt"},
-            {"role": "triage",  "prefill": 1260, "gen": 5,  "via": "search: recent papers", "label": "triage search hits"},
-            {"role": "read",    "prefill": 6300, "gen": 8,  "via": "fetch: arXiv full text", "label": "read paper"},
-            {"role": "plan",    "prefill": 1800, "gen": 10, "via": "fetch: reference repo", "label": "extract p-less algorithm"},
-            {"role": "codegen", "prefill": 0,    "gen": 14, "label": "write p_less.py"},
-            {"role": "codegen", "prefill": 0,    "gen": 14, "label": "write test_p_less.py"},
-            {"role": "test",    "prefill": 400,  "gen": 6,  "via": "run tests", "label": "read output -> 9 passed"},
+            {"role": "reason",  "prefill": 40,   "gen": 80,   "label": "read prompt, decide to search"},
+            {"role": "triage",  "prefill": 1260, "gen": 120,  "via": "search: recent papers", "label": "triage search hits"},
+            {"role": "read",    "prefill": 7400, "gen": 300,  "via": "fetch: arXiv abstract + full text", "label": "read paper"},
+            {"role": "plan",    "prefill": 3300, "gen": 2900, "via": "fetch: reference repo + code", "label": "extract p-less algorithm"},
+            {"role": "codegen", "prefill": 0,    "gen": 1200, "label": "write p_less.py"},
+            {"role": "codegen", "prefill": 0,    "gen": 1400, "label": "write test_p_less.py"},
+            {"role": "test",    "prefill": 400,  "gen": 400,  "via": "run tests", "label": "read output -> 9 passed, summarize"},
         ],
     )
 
