@@ -15,6 +15,11 @@ const ELK_OPTS = {
   "elk.layered.spacing.nodeNodeBetweenLayers": "48",
   "elk.spacing.nodeNode": "28",
   "elk.layered.nodePlacement.strategy": "NETWORK_SIMPLEX",
+  // Long chains (e.g. the 68-node coding agent) would otherwise be one
+  // unreadable ribbon. Wrap them to a viewport-ish aspect ratio so cards stay
+  // legible. Harmless for the short graphs (they don't reach the wrap width).
+  "elk.layered.wrapping.strategy": "MULTI_EDGE",
+  "elk.aspectRatio": "1.7",
 };
 
 // Returns { nodes, edges } ready for <ReactFlow>. Async because elk.layout is.

@@ -41,6 +41,7 @@ export default function GraphView({ graph, caption }) {
             edges={laid.edges}
             nodeTypes={nodeTypes}
             fitView
+            fitViewOptions={{ padding: 0.15, maxZoom: 1.4 }}
             minZoom={0.1}
             proOptions={{ hideAttribution: true }}
             nodesDraggable={false}
