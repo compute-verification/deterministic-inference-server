@@ -34,7 +34,8 @@ describe("segmentGraph", () => {
     const nodes = [...a.nodes, ...b.nodes];
     const edges = [...a.edges, ...b.edges, { src: 19, dst: 20 }];
     const segs = segmentGraph(nodes, edges);
-    expect(segs.map((s) => s.key)).toEqual(["plan", "codegen"]);
+    expect(segs).toHaveLength(2);
+    expect(segs.map((s) => s.nodeIds.length)).toEqual([20, 20]);
     expect(segs.every((s) => s.collapsible)).toBe(true);
   });
 
@@ -68,9 +69,11 @@ describe("segmentGraph", () => {
 });
 
 describe("buildDisplayGraph", () => {
-  // prefill -> [20 decode "plan"] -> prefill -> [20 decode "codegen"]
+  // Realistic shape: a turn's prefill and its decodes share the SAME phase
+  // (the turn label), so the test guards that kind-in-key keeps them apart.
+  // prefill(plan) -> [20 decode "plan"] -> prefill(codegen) -> [20 decode "codegen"]
   function codingLike() {
-    const nodes = [{ id: 0, kind: "prefill", flops: 100, tokens: 40, payload: { phase: "read" } }];
+    const nodes = [{ id: 0, kind: "prefill", flops: 100, tokens: 40, payload: { phase: "plan" } }];
     const edges = [];
     let prev = 0;
     const addRun = (n, phase, startId) => {
@@ -82,12 +85,21 @@ describe("buildDisplayGraph", () => {
       }
     };
     addRun(20, "plan", 1);
-    nodes.push({ id: 21, kind: "prefill", flops: 100, tokens: 5, payload: { phase: "test" } });
+    nodes.push({ id: 21, kind: "prefill", flops: 100, tokens: 5, payload: { phase: "codegen" } });
     edges.push({ src: prev, dst: 21 });
     prev = 21;
     addRun(20, "codegen", 22);
     return { nodes, edges };
   }
+
+  it("keeps a turn's prefill separate from its same-phase decode run", () => {
+    const g = codingLike();
+    const d = buildDisplayGraph(g);
+    const planGroup = d.nodes.find((n) => n.label === "plan" && n.kind === "group");
+    expect(planGroup.count).toBe(20); // the prefill is NOT absorbed (would be 21)
+    expect(planGroup.groupKind).toBe("decode");
+    expect(d.nodes.filter((n) => n.kind === "prefill")).toHaveLength(2);
+  });
 
   it("collapses runs but keeps prefills atomic", () => {
     const g = codingLike();
@@ -126,7 +138,8 @@ describe("buildDisplayGraph", () => {
   it("expands one segment back to atomic nodes", () => {
     const g = codingLike();
     const segs = segmentGraph(g.nodes, g.edges);
-    const planSeg = segs.find((s) => s.key === "plan");
+    // the collapsible decode run whose first node is id 1 (the "plan" decodes)
+    const planSeg = segs.find((s) => s.collapsible && s.nodeIds[0] === 1);
     const d = buildDisplayGraph(g, new Set([planSeg.id]));
     // plan run is now 20 atomic decode nodes; codegen still a group
     expect(d.nodes.filter((n) => n.kind === "decode")).toHaveLength(20);

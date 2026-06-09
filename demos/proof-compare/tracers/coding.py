@@ -57,13 +57,17 @@ def trace_coding_stub(agent_key, prompt, turns):
     first = True
     for turn in turns:
         role = turn["role"]
+        # `phase` is the per-turn label ("write p_less.py"); it lets the viz
+        # group a turn's forward passes together without merging adjacent turns
+        # of the same role (e.g. the two codegen files).
+        phase = turn.get("label") or role
         p = int(turn.get("prefill", 0))
         if p > 0:
             # New tokens occupy positions [ctx, ctx+p); each attends to all
             # tokens up to and including itself -> a triangle difference.
             attended = (ctx + p) * (ctx + p + 1) // 2 - ctx * (ctx + 1) // 2
             ctx += p
-            payload = {"role": role}
+            payload = {"role": role, "phase": phase}
             if first:
                 payload["prompt"] = prompt
             if turn.get("via"):
@@ -71,14 +75,14 @@ def trace_coding_stub(agent_key, prompt, turns):
             prev = tr.event(
                 "prefill", model=agent_key, tokens=p, attended=attended, logits=1,
                 inputs=([prev] if prev is not None else []),
-                label=turn.get("label", f"{role} prefill"), payload=payload,
+                label=phase, payload=payload,
             )
         for _ in range(int(turn.get("gen", 0))):
             ctx += 1
             prev = tr.event(
                 "decode", model=agent_key, tokens=1, attended=ctx, logits=1,
                 inputs=([prev] if prev is not None else []),
-                label=role, payload={"role": role},
+                label=role, payload={"role": role, "phase": phase},
             )
         first = False
 

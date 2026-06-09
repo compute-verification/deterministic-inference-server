@@ -76,7 +76,27 @@ h1 {
   color: var(--muted);
   margin-bottom: 8px;
   font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
+
+.toolbar {
+  flex: none;
+}
+
+.mini {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.mini:hover { border-color: var(--muted); }
 
 .canvas {
   flex: 1;
@@ -141,6 +161,17 @@ h1 {
 .task-bar-fill {
   height: 100%;
   border-radius: 3px;
+}
+
+/* collapsed run: dashed border + pointer to signal it expands */
+.group-node {
+  border-style: dashed;
+  cursor: pointer;
+}
+
+/* an expanded run's atomic nodes: pointer to signal click-to-collapse */
+.task-node.collapsible {
+  cursor: pointer;
 }
 
 .react-flow__handle {

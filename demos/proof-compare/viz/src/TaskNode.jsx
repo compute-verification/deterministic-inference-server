@@ -6,9 +6,10 @@ import { fmtFlops } from "./graph-model.js";
 // FLOPs bar so relative cost is readable at a glance. Hover shows the payload.
 export default function TaskNode({ data }) {
   const mark = data.status === "rejected" ? "✗ " : "";
-  const tip = buildTip(data);
+  const tip = data.collapsibleSeg ? buildTip(data) + "\n(click to collapse this run)" : buildTip(data);
+  const cls = "task-node" + (data.collapsibleSeg ? " collapsible" : "");
   return (
-    <div className="task-node" style={{ borderColor: data.color }} title={tip}>
+    <div className={cls} style={{ borderColor: data.color }} title={tip}>
       <Handle type="target" position={Position.Top} />
       <div className="task-kind" style={{ color: data.color }}>
         {mark}

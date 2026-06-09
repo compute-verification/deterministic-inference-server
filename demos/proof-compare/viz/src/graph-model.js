@@ -12,10 +12,12 @@ export const KIND_COLOR = {
 };
 export const REJECTED = "#f85149"; // red
 
-// A node's fill: rejected drafts go red, everything else by kind.
+// A node's fill: rejected drafts go red, everything else by kind. Group nodes
+// borrow the colour of the kind they collapse (carried as groupKind).
 export function nodeColor(n) {
-  if (n.kind === "draft" && n.status === "rejected") return REJECTED;
-  return KIND_COLOR[n.kind] || "#8b949e";
+  const kind = n.kind === "group" ? n.groupKind : n.kind;
+  if (kind === "draft" && n.status === "rejected") return REJECTED;
+  return KIND_COLOR[kind] || "#8b949e";
 }
 
 // Edge appearance, derived from the kinds/status of its endpoints. Mirrors the
