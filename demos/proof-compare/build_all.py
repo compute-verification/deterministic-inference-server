@@ -51,38 +51,22 @@ def _spec_trace() -> dict:
 
 
 def _training_trace() -> dict:
-    return t_train.trace_training_stub(
-        "Qwen/Qwen3-1.7B", max_steps=6, batch=4, seq_len=8,
-        loss_trajectory=[2.0, 1.6, 1.3, 1.1, 0.95, 0.9], eval_steps=2, eval_gen=3)
+    """Real captured LoRA run (toy scale, H100) -> canonical trace."""
+    capture = json.loads((TRACES / "training.real.json").read_text())
+    return t_train.trace_training_real(capture)
 
 
 def _coding_trace() -> dict:
-    # Forward-pass-granular DAG of the p-less implementation run (STUB: token
-    # counts are estimates; see demos/coding-agent). Each turn = one prefill over
-    # the tokens READ (prompt or tool output) + one decode per GENERATED token.
-    # The agent dispatches concurrent LLM calls, so the graph fans out and in:
-    #   reason -> (read paper || read reference repo) -> plan
-    #          -> (write p_less.py || write test_p_less.py) -> test
-    # Counts are REALISTIC (not shrunk): ~6.5k forward passes. Tool calls
-    # (search/fetch/run-tests) are not forward passes -- they appear as the `via`
-    # tag + prefill size of the turn that ingests their output.
-    return t_code.trace_coding_stub(
-        "agent",
-        prompt="Summarize a paper that just came out, then implement it",
-        stages=[
-            {"role": "reason", "prefill": 40, "gen": 80, "label": "read prompt, plan approach"},
-            {"parallel": [
-                {"role": "read", "prefill": 7400, "gen": 300, "via": "search + fetch: arXiv abstract + full text", "label": "read paper"},
-                {"role": "read", "prefill": 1800, "gen": 250, "via": "fetch: reference repo + code", "label": "read reference repo"},
-            ]},
-            {"role": "plan", "prefill": 550, "gen": 2900, "via": "merge read summaries", "label": "extract p-less algorithm"},
-            {"parallel": [
-                {"role": "codegen", "prefill": 0, "gen": 1200, "label": "write p_less.py"},
-                {"role": "codegen", "prefill": 0, "gen": 1400, "label": "write test_p_less.py"},
-            ]},
-            {"role": "test", "prefill": 400, "gen": 400, "via": "run tests", "label": "read output -> 9 passed, summarize"},
-        ],
-    )
+    """Real captured coding-agent run (H100) -> canonical trace.
+
+    The capture is one entry per actual LLM call (real prompt/gen token
+    counts; capture/run_coding_agent.py); the tracer renders it as a DAG of
+    forward passes -- one prefill per call + one decode per generated token,
+    fanning out where the agent dispatched parallel calls (4 file reads, 3
+    plan candidates, src||test codegen) and fanning back in at merges.
+    """
+    capture = json.loads((TRACES / "coding.real.json").read_text())
+    return t_code.trace_coding_real(capture)
 
 
 def build_all() -> dict:

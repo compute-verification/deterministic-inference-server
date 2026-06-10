@@ -31,8 +31,8 @@ export default function App() {
       <header>
         <h1>Task graphs</h1>
         <p className="sub">
-          One node = one forward pass. Each scenario is auto-generated from a real
-          (or stubbed) run through one tracer → builder → renderer pipeline.
+          One node = one forward pass. Every scenario is auto-generated from a
+          real H100 run through one tracer → builder → renderer pipeline.
         </p>
         <nav className="tabs">
           {SCENES.map((s) => (

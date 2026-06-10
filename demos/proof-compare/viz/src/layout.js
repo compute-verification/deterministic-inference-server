@@ -22,6 +22,10 @@ const GAP_X = NODE_W + 44;
 const GAP_Y = NODE_H + 34;
 const ASPECT = 1.7; // target width/height for a wrapped chain
 
+// Above this, skip elk entirely (see layoutGraph): worst observed was elk
+// grinding >30s on a 3.7k-node branching graph without ever throwing.
+export const ELK_MAX_NODES = 400;
+
 const ELK_OPTS = {
   "elk.algorithm": "layered",
   "elk.direction": "DOWN",
@@ -123,14 +127,17 @@ export async function layoutGraph(graph) {
   let pos;
   if (isChain(gNodes, gEdges)) {
     pos = serpentinePositions(gNodes);
+  } else if (gNodes.length > ELK_MAX_NODES) {
+    // elk on a multi-thousand-node DAG either grinds for minutes (blocking
+    // the main thread) or overflows the stack -- skip it outright.
+    pos = layeredPositions(gNodes, gEdges);
   } else {
     try {
       // elk gives the nicest layered layout for small DAGs (spec fan-in,
       // training branches, the collapsed coding diamond).
       pos = await elkPositions(gNodes, gEdges);
     } catch (err) {
-      // elk recurses per layer and overflows on a huge DAG (expanded coding).
-      // Fall back to the iterative longest-path layouter.
+      // elk recurses per layer and overflows on a huge DAG.
       pos = layeredPositions(gNodes, gEdges);
     }
   }

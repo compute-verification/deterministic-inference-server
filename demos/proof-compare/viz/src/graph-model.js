@@ -53,8 +53,8 @@ export function maxFlops(nodes) {
 
 // The four scenarios, in tab order, with the caption shown under each graph.
 export const SCENES = [
-  { key: "inference", label: "Inference", caption: "Inference (real H100) — greedy decode chain" },
-  { key: "training", label: "LoRA training", caption: "LoRA training (stub) — spine + eval branches" },
+  { key: "inference", label: "Inference", caption: "Inference (Qwen3-1.7B, real H100) — greedy decode chain" },
+  { key: "training", label: "LoRA training", caption: "LoRA fine-tune (Qwen3-1.7B, real H100, toy scale) — train-step spine + real eval branches" },
   { key: "spec", label: "Speculative decoding", caption: "Speculative decoding (real H100) — drafts fan into verify" },
-  { key: "coding", label: "Coding agent", caption: "Coding agent (stub) — parallel reads + parallel codegen; one node = one forward pass (collapsed)" },
+  { key: "coding", label: "Coding agent", caption: "Coding agent (Qwen3-8B, real H100) — parallel reads, plans, codegen; one node = one forward pass (collapsed)" },
 ];

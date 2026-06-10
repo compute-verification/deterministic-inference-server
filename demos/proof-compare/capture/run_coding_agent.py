@@ -36,7 +36,11 @@ HERE = Path(__file__).resolve().parent
 WORKSPACE = HERE / "agent_workspace"
 WORKSPACE_FILES = ["README.md", "paper.md", "reference.py", "rng.py"]
 
-MODEL_ID = "Qwen/Qwen3-1.7B"
+# 8B, not 1.7B: the agent needs a model that can actually complete the task.
+# (A 1.7B no-thinking attempt produced broken code that 2 fix rounds couldn't
+# recover; the capture keeps whatever really happened, so use a model with
+# headroom. Agents realistically run a stronger model than a serving demo.)
+MODEL_ID = "Qwen/Qwen3-8B"
 TASK = (
     "Read the mini-paper in paper.md and implement Freivalds' randomized check "
     "for matrix products: freivalds.py with freivalds_check(A, B, C, k=16, seed=1), "
@@ -49,7 +53,7 @@ SYSTEM = "You are a careful coding agent working in a small Python workspace. Be
 PLAN_FOCUS = ["correctness", "simplicity", "edge cases"]
 MAX_NEW = {"reason": 200, "read": 240, "plan": 350, "synth": 450,
            "codegen": 750, "test": 220, "fix": 800}
-MAX_FIX_ROUNDS = 2
+MAX_FIX_ROUNDS = 3
 OUTPUT_TAIL = 1800
 
 
@@ -62,7 +66,7 @@ class RealLM:
         self.torch = torch
         self.tok = AutoTokenizer.from_pretrained(model_id)
         self.model = AutoModelForCausalLM.from_pretrained(
-            model_id, torch_dtype=torch.bfloat16, device_map="cuda").eval()
+            model_id, dtype=torch.bfloat16).to("cuda").eval()
         self.config = self.model.config.to_dict()
 
     def generate(self, system: str, user: str, max_new: int):
@@ -177,9 +181,32 @@ def extract_blocks(text: str) -> list[str]:
     return re.findall(r"```(?:python)?\n(.*?)```", text, flags=re.DOTALL)
 
 
+FILE_MARK = re.compile(r"^#\s*file:\s*(\S+)\s*$", re.MULTILINE)
+FENCE_LINE = re.compile(r"^```(?:python)?\s*$", re.MULTILINE)
+
+
+def split_file_sections(text: str) -> list[tuple[str, str]]:
+    """`# file: X` marker lines in PLAIN text -> [(name, body), ...].
+
+    Models sometimes emit the multi-file format without the code fences; the
+    markers alone are unambiguous enough to recover the files.
+    """
+    marks = list(FILE_MARK.finditer(text))
+    out = []
+    for i, m in enumerate(marks):
+        end = marks[i + 1].start() if i + 1 < len(marks) else len(text)
+        out.append((m.group(1), text[m.end():end]))
+    return out
+
+
 def write_named_blocks(text: str, rundir: Path, default_name: str | None) -> list[str]:
-    """Write fenced blocks to files. A block whose first line is `# file: X`
-    names itself; otherwise it goes to default_name (single-file codegen)."""
+    """Write generated code to files, most-structured format first.
+
+    1. fenced ```python blocks (a `# file: X` first line names a block;
+       otherwise it goes to default_name -- the single-file codegen case);
+    2. if no file emerged: unfenced `# file: X` sections in the raw text;
+    3. if still nothing and default_name is set: the whole text as raw code.
+    """
     written = []
     for block in extract_blocks(text):
         name = default_name
@@ -190,6 +217,15 @@ def write_named_blocks(text: str, rundir: Path, default_name: str | None) -> lis
         if name and re.fullmatch(r"[\w.]+\.py", name):
             (rundir / name).write_text(block.rstrip() + "\n")
             written.append(name)
+    if not written:
+        for name, body in split_file_sections(text):
+            if re.fullmatch(r"[\w.]+\.py", name):
+                body = FENCE_LINE.sub("", body)
+                (rundir / name).write_text(body.strip() + "\n")
+                written.append(name)
+    if not written and default_name and text.strip():
+        (rundir / default_name).write_text(FENCE_LINE.sub("", text).strip() + "\n")
+        written.append(default_name)
     return written
 
 
@@ -251,14 +287,18 @@ def run_agent(lm) -> dict:
         ("freivalds.py", f"--- reference.py ---\n{files['reference.py']}\n"
                          f"--- rng.py ---\n{files['rng.py']}"),
         ("test_freivalds.py", "freivalds.py will define "
-                              "freivalds_check(A, B, C, k=16, seed=1).\n"
+                              "freivalds_check(A, B, C, k=16, seed=1). "
+                              "Import matmul from reference to build expected "
+                              "products.\n"
                               f"--- reference.py ---\n{files['reference.py']}"),
     ]:
         cid, text = ag.call(
             f"write {fname}", "codegen", [synth],
             f"{TASK}\n\n--- final plan ---\n{final_plan}\n\n{extra}\n\n"
             f"Write the complete contents of {fname}. "
-            "Output exactly one ```python code block and nothing else.")
+            "Import Xorshift from rng and mat_vec from reference -- do NOT "
+            "redefine them. Output exactly one ```python code block and "
+            "nothing else.")
         codegen.append(cid)
         write_named_blocks(text, rundir, fname)
 

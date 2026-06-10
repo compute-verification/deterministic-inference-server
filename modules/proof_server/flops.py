@@ -57,11 +57,6 @@ KNOWN_SHAPES: dict[str, dict] = {
                         "num_attention_heads": 16, "head_dim": 128,
                         "num_key_value_heads": 8, "intermediate_size": 3072,
                         "vocab_size": 151936},
-    # ~32B stand-in for the coding agent (documented assumption, not measured).
-    "agent": {"num_hidden_layers": 64, "hidden_size": 5120,
-              "num_attention_heads": 40, "head_dim": 128,
-              "num_key_value_heads": 8, "intermediate_size": 27648,
-              "vocab_size": 151936},
 }
 
 

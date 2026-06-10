@@ -52,7 +52,7 @@ def lora_train_capture() -> dict:
     torch.manual_seed(0)
     tok = AutoTokenizer.from_pretrained(MODEL_ID)
     model = AutoModelForCausalLM.from_pretrained(
-        MODEL_ID, torch_dtype=torch.bfloat16, device_map="cuda")
+        MODEL_ID, dtype=torch.bfloat16).to("cuda")
     cfg = model.config.to_dict()
 
     # ---- freeze base, inject LoRA on q/v projections -------------------------
