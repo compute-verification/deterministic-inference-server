@@ -49,8 +49,13 @@ def speculative_decode(
     target_next: NextToken,
     k: int,
     max_tokens: int,
+    on_round: Callable[["SpecRound"], None] | None = None,
 ) -> SpecResult:
-    """Greedy speculative decoding. ``k`` drafts proposed per round."""
+    """Greedy speculative decoding. ``k`` drafts proposed per round.
+
+    ``on_round`` (optional) is called with each completed SpecRound — capture
+    harnesses use it to stream live progress without changing the algorithm.
+    """
     output: list[int] = []
     rounds: list[SpecRound] = []
     draft_steps = 0
@@ -77,6 +82,8 @@ def speculative_decode(
         rounds.append(SpecRound(drafts=list(proposed),
                                 num_accepted=len(accepted),
                                 correction=correction))
+        if on_round is not None:
+            on_round(rounds[-1])
 
         # 4. commit accepted + correction (respecting max_tokens).
         for tok in accepted + [correction]:
@@ -147,10 +154,12 @@ def hf_models(draft_model_id: str, target_model_id: str):  # pragma: no cover - 
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
     tok = AutoTokenizer.from_pretrained(target_model_id)
+    # transformers >= 5: `torch_dtype=` was removed (use `dtype=`) and
+    # device_map="cuda" requires accelerate (absent on the nix image).
     draft = AutoModelForCausalLM.from_pretrained(
-        draft_model_id, torch_dtype=torch.bfloat16, device_map="cuda").eval()
+        draft_model_id, dtype=torch.bfloat16).to("cuda").eval()
     target = AutoModelForCausalLM.from_pretrained(
-        target_model_id, torch_dtype=torch.bfloat16, device_map="cuda").eval()
+        target_model_id, dtype=torch.bfloat16).to("cuda").eval()
 
     @torch.inference_mode()
     def _argmax(model, ctx: list[int]) -> int:

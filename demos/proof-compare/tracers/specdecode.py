@@ -20,11 +20,16 @@ from modules.proof_server.tracer import Tracer
 
 
 def trace_spec_decode(prompt_len, rounds, draft_key="hf://Qwen/Qwen3-0.6B",
-                      target_key="hf://Qwen/Qwen3-1.7B"):
-    """Build a canonical trace from a speculative-decoding run."""
+                      target_key="hf://Qwen/Qwen3-1.7B",
+                      draft_config=None, target_config=None):
+    """Build a canonical trace from a speculative-decoding run.
+
+    ``draft_config``/``target_config`` (optional) are the models' real HF config
+    dicts; when omitted, shapes fall back to KNOWN_SHAPES via the key.
+    """
     tr = Tracer()
-    tr.add_shape(draft_key, F.shape_for(draft_key))
-    tr.add_shape(target_key, F.shape_for(target_key))
+    tr.add_shape(draft_key, draft_config or F.shape_for(draft_key))
+    tr.add_shape(target_key, target_config or F.shape_for(target_key))
 
     ctx = prompt_len            # committed context length entering this round
     prev_verify = None
@@ -57,3 +62,24 @@ def trace_spec_decode(prompt_len, rounds, draft_key="hf://Qwen/Qwen3-0.6B",
         ctx += a + 1            # committed = accepted drafts + the correction
 
     return tr.trace()
+
+
+def trace_spec_real(capture):
+    """Convert a run_spec.py capture into the canonical trace.
+
+    Same converter contract as trace_training_real / trace_coding_real: takes
+    the harness's recorded capture, uses the models' REAL configs from it.
+    """
+    if capture.get("kind") != "spec_decode_capture":
+        raise ValueError(f"not a spec_decode_capture: {capture.get('kind')!r}")
+    rounds = capture.get("rounds") or []
+    if not rounds:
+        raise ValueError("capture has no rounds")
+    return trace_spec_decode(
+        int(capture["prompt_len"]),
+        rounds,
+        draft_key="hf://" + capture["draft_model"],
+        target_key="hf://" + capture["target_model"],
+        draft_config=capture["draft_config"],
+        target_config=capture["target_config"],
+    )
