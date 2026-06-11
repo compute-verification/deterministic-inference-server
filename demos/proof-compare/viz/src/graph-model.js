@@ -51,6 +51,18 @@ export function maxFlops(nodes) {
   return Math.max(1, ...nodes.map((n) => n.flops || 0));
 }
 
+// URL params for embedding. ?scene=<key> picks the initial tab; ?src=<url>
+// overrides where graphs.json is fetched from (the 4-node tap demo points
+// this at a protocol run's generated graph). Pure function -> unit-tested.
+export function viewParams(search, scenes = SCENES) {
+  const p = new URLSearchParams(search || "");
+  const requested = p.get("scene");
+  return {
+    scene: scenes.some((s) => s.key === requested) ? requested : scenes[0].key,
+    src: p.get("src") || "./graphs.json",
+  };
+}
+
 // The four scenarios, in tab order, with the caption shown under each graph.
 export const SCENES = [
   { key: "inference", label: "Inference", caption: "Inference (Qwen3-1.7B, real H100) — greedy decode chain" },

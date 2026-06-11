@@ -1,0 +1,367 @@
+{
+ "workload": "inference",
+ "source": "mock",
+ "events": [
+  {
+   "ts": 0.0,
+   "type": "request_sent",
+   "id": 1,
+   "workload": "inference",
+   "params": {
+    "prompt": "The capital of France is",
+    "max_tokens": 12
+   }
+  },
+  {
+   "ts": 0.0,
+   "type": "gateway_signed",
+   "id": 1,
+   "workload": "inference",
+   "signature_prefix": "61bc4ea09b60"
+  },
+  {
+   "ts": 0.0,
+   "type": "tap_received",
+   "id": 1,
+   "workload": "inference"
+  },
+  {
+   "ts": 0.0,
+   "type": "tap_relayed_request",
+   "id": 1,
+   "workload": "inference"
+  },
+  {
+   "ts": 0.099,
+   "type": "host_progress",
+   "id": 1,
+   "workload": "inference",
+   "progress": {
+    "i": 1,
+    "of": 12,
+    "token_id": 2302,
+    "type": "token"
+   }
+  },
+  {
+   "ts": 0.101,
+   "type": "host_progress",
+   "id": 1,
+   "workload": "inference",
+   "progress": {
+    "i": 2,
+    "of": 12,
+    "token_id": 2109,
+    "type": "token"
+   }
+  },
+  {
+   "ts": 0.103,
+   "type": "host_progress",
+   "id": 1,
+   "workload": "inference",
+   "progress": {
+    "i": 3,
+    "of": 12,
+    "token_id": 2201,
+    "type": "token"
+   }
+  },
+  {
+   "ts": 0.105,
+   "type": "host_progress",
+   "id": 1,
+   "workload": "inference",
+   "progress": {
+    "i": 4,
+    "of": 12,
+    "token_id": 2751,
+    "type": "token"
+   }
+  },
+  {
+   "ts": 0.106,
+   "type": "host_progress",
+   "id": 1,
+   "workload": "inference",
+   "progress": {
+    "i": 5,
+    "of": 12,
+    "token_id": 2815,
+    "type": "token"
+   }
+  },
+  {
+   "ts": 0.109,
+   "type": "host_progress",
+   "id": 1,
+   "workload": "inference",
+   "progress": {
+    "i": 6,
+    "of": 12,
+    "token_id": 2004,
+    "type": "token"
+   }
+  },
+  {
+   "ts": 0.111,
+   "type": "host_progress",
+   "id": 1,
+   "workload": "inference",
+   "progress": {
+    "i": 7,
+    "of": 12,
+    "token_id": 2709,
+    "type": "token"
+   }
+  },
+  {
+   "ts": 0.112,
+   "type": "host_progress",
+   "id": 1,
+   "workload": "inference",
+   "progress": {
+    "i": 8,
+    "of": 12,
+    "token_id": 2779,
+    "type": "token"
+   }
+  },
+  {
+   "ts": 0.114,
+   "type": "host_progress",
+   "id": 1,
+   "workload": "inference",
+   "progress": {
+    "i": 9,
+    "of": 12,
+    "token_id": 2545,
+    "type": "token"
+   }
+  },
+  {
+   "ts": 0.115,
+   "type": "host_progress",
+   "id": 1,
+   "workload": "inference",
+   "progress": {
+    "i": 10,
+    "of": 12,
+    "token_id": 2685,
+    "type": "token"
+   }
+  },
+  {
+   "ts": 0.116,
+   "type": "host_progress",
+   "id": 1,
+   "workload": "inference",
+   "progress": {
+    "i": 11,
+    "of": 12,
+    "token_id": 2731,
+    "type": "token"
+   }
+  },
+  {
+   "ts": 0.117,
+   "type": "host_progress",
+   "id": 1,
+   "workload": "inference",
+   "progress": {
+    "i": 12,
+    "of": 12,
+    "token_id": 2175,
+    "type": "token"
+   }
+  },
+  {
+   "ts": 0.121,
+   "type": "host_completed",
+   "id": 1,
+   "workload": "inference",
+   "capture_digest": "sha256:9830bae75b36ed954d1580de62f52ee87e493cc029d14fb5ece70668132b5b9e",
+   "output_sha256": "sha256:9830bae75b36ed954d1580de62f52ee87e493cc029d14fb5ece70668132b5b9e",
+   "summary": {
+    "forward_passes": 12,
+    "output_preview": "<2302><2109><2201><2751><2815><2004><2709><2779><2545><2685><2731><2175>"
+   }
+  },
+  {
+   "ts": 0.121,
+   "type": "tap_relayed_response",
+   "id": 1,
+   "workload": "inference"
+  },
+  {
+   "ts": 0.121,
+   "type": "client_received",
+   "id": 1,
+   "workload": "inference",
+   "summary": {
+    "forward_passes": 12,
+    "output_preview": "<2302><2109><2201><2751><2815><2004><2709><2779><2545><2685><2731><2175>"
+   }
+  },
+  {
+   "ts": 0.122,
+   "type": "tap_verify_started",
+   "id": 1,
+   "workload": "inference"
+  },
+  {
+   "ts": 0.217,
+   "type": "recomp_progress",
+   "id": 1,
+   "workload": "inference",
+   "progress": {
+    "i": 1,
+    "of": 12,
+    "token_id": 2302,
+    "type": "token"
+   }
+  },
+  {
+   "ts": 0.219,
+   "type": "recomp_progress",
+   "id": 1,
+   "workload": "inference",
+   "progress": {
+    "i": 2,
+    "of": 12,
+    "token_id": 2109,
+    "type": "token"
+   }
+  },
+  {
+   "ts": 0.221,
+   "type": "recomp_progress",
+   "id": 1,
+   "workload": "inference",
+   "progress": {
+    "i": 3,
+    "of": 12,
+    "token_id": 2201,
+    "type": "token"
+   }
+  },
+  {
+   "ts": 0.222,
+   "type": "recomp_progress",
+   "id": 1,
+   "workload": "inference",
+   "progress": {
+    "i": 4,
+    "of": 12,
+    "token_id": 2751,
+    "type": "token"
+   }
+  },
+  {
+   "ts": 0.224,
+   "type": "recomp_progress",
+   "id": 1,
+   "workload": "inference",
+   "progress": {
+    "i": 5,
+    "of": 12,
+    "token_id": 2815,
+    "type": "token"
+   }
+  },
+  {
+   "ts": 0.225,
+   "type": "recomp_progress",
+   "id": 1,
+   "workload": "inference",
+   "progress": {
+    "i": 6,
+    "of": 12,
+    "token_id": 2004,
+    "type": "token"
+   }
+  },
+  {
+   "ts": 0.226,
+   "type": "recomp_progress",
+   "id": 1,
+   "workload": "inference",
+   "progress": {
+    "i": 7,
+    "of": 12,
+    "token_id": 2709,
+    "type": "token"
+   }
+  },
+  {
+   "ts": 0.227,
+   "type": "recomp_progress",
+   "id": 1,
+   "workload": "inference",
+   "progress": {
+    "i": 8,
+    "of": 12,
+    "token_id": 2779,
+    "type": "token"
+   }
+  },
+  {
+   "ts": 0.229,
+   "type": "recomp_progress",
+   "id": 1,
+   "workload": "inference",
+   "progress": {
+    "i": 9,
+    "of": 12,
+    "token_id": 2545,
+    "type": "token"
+   }
+  },
+  {
+   "ts": 0.23,
+   "type": "recomp_progress",
+   "id": 1,
+   "workload": "inference",
+   "progress": {
+    "i": 10,
+    "of": 12,
+    "token_id": 2685,
+    "type": "token"
+   }
+  },
+  {
+   "ts": 0.231,
+   "type": "recomp_progress",
+   "id": 1,
+   "workload": "inference",
+   "progress": {
+    "i": 11,
+    "of": 12,
+    "token_id": 2731,
+    "type": "token"
+   }
+  },
+  {
+   "ts": 0.232,
+   "type": "recomp_progress",
+   "id": 1,
+   "workload": "inference",
+   "progress": {
+    "i": 12,
+    "of": 12,
+    "token_id": 2175,
+    "type": "token"
+   }
+  },
+  {
+   "ts": 0.234,
+   "type": "recomp_verified",
+   "id": 1,
+   "workload": "inference",
+   "is_verified": true,
+   "expected_sha256": "sha256:9830bae75b36ed954d1580de62f52ee87e493cc029d14fb5ece70668132b5b9e",
+   "actual_sha256": "sha256:9830bae75b36ed954d1580de62f52ee87e493cc029d14fb5ece70668132b5b9e",
+   "reason": null
+  }
+ ]
+}

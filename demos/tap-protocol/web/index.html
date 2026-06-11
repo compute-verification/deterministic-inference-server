@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Verified inference</title>
+<title>Verified compute — 4-node demo</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
@@ -42,7 +42,7 @@
   .container { max-width: 1080px; margin: 0 auto; padding: 4rem 1.75rem 5rem; }
 
   /* Header */
-  header { margin-bottom: 2.5rem; }
+  header { margin-bottom: 2rem; }
   .brand {
     display: flex; align-items: center; gap: 0.5rem;
     color: var(--muted); font-size: 0.78rem; font-weight: 500;
@@ -54,7 +54,7 @@
     margin: 0 0 0.6rem; letter-spacing: -0.025em; color: var(--ink);
   }
   .lede {
-    color: var(--ink-2); font-size: 1.05rem; margin: 0; max-width: 60ch; line-height: 1.55;
+    color: var(--ink-2); font-size: 1.05rem; margin: 0; max-width: 64ch; line-height: 1.55;
     font-weight: 400; letter-spacing: -0.005em;
   }
   .lede strong { color: var(--ink); font-weight: 600; }
@@ -77,55 +77,60 @@
   .status.bad   { color: var(--bad);  background: var(--bad-bg);  border-color: #fca5a5; }
   .status.bad::before   { background: var(--bad); }
 
-  /* Prompt input — proper SaaS form control */
-  .prompt-card {
-    background: var(--bg);
-    border: 1px solid var(--rule);
-    border-radius: 12px;
-    box-shadow: var(--shadow-sm);
-    padding: 1rem 1.1rem;
-    display: flex; align-items: flex-end; gap: 0.75rem;
+  /* Mode toggle */
+  .mode-row {
+    display: flex; align-items: center; gap: 0.9rem; flex-wrap: wrap;
+    margin: 1.4rem 0 1.8rem;
+  }
+  .mode-toggle {
+    display: inline-flex; background: var(--bg-soft);
+    border: 1px solid var(--rule); border-radius: 8px; padding: 3px;
+  }
+  .mode-toggle button {
+    font: 600 0.82rem var(--sans); color: var(--muted);
+    background: transparent; border: none; border-radius: 6px;
+    padding: 0.4rem 0.9rem; cursor: pointer;
+    transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+  }
+  .mode-toggle button.active { background: var(--bg); color: var(--ink); box-shadow: var(--shadow-sm); }
+  .mode-note { font-size: 0.82rem; color: var(--muted); }
+  .mode-note .src { font: 500 0.78rem var(--mono); color: var(--ink-2); }
+
+  /* Scenario cards */
+  .scenarios {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.9rem;
     margin-bottom: 2rem;
+  }
+  .scenario {
+    background: var(--bg); border: 1px solid var(--rule); border-radius: 12px;
+    box-shadow: var(--shadow-sm); padding: 1rem 1.05rem 0.95rem;
+    display: flex; flex-direction: column; gap: 0.45rem;
     transition: border-color 0.18s, box-shadow 0.18s;
   }
-  .prompt-card:focus-within {
-    border-color: var(--ink-2);
-    box-shadow: 0 0 0 3px rgba(9, 9, 11, 0.04), var(--shadow-md);
+  .scenario.running { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.07), var(--shadow-md); }
+  .scenario h3 { margin: 0; font-size: 0.98rem; font-weight: 600; letter-spacing: -0.01em; }
+  .scenario .desc { font-size: 0.78rem; color: var(--muted); line-height: 1.45; min-height: 2.5em; }
+  .scenario .stats {
+    display: flex; flex-direction: column; gap: 0.12rem;
+    font: 500 0.72rem var(--mono); color: var(--ink-2);
+    padding: 0.45rem 0 0.2rem; border-top: 1px solid var(--rule-soft);
   }
-  .prompt-card .field { flex: 1; display: flex; flex-direction: column; }
-  .prompt-card label {
-    font-size: 0.72rem; color: var(--muted); font-weight: 600;
-    letter-spacing: 0.02em; text-transform: uppercase; margin-bottom: 0.3rem;
-  }
-  .prompt-card textarea {
-    width: 100%; min-height: 1.6rem; max-height: 9rem;
-    font: 400 0.97rem/1.5 var(--sans); color: var(--ink);
-    background: transparent; border: none; outline: none; padding: 0; resize: vertical;
-  }
-  .prompt-card textarea::placeholder { color: var(--muted-2); }
-  .prompt-card .controls { display: flex; gap: 0.5rem; align-items: center; }
-  .prompt-card select {
-    font: 500 0.82rem var(--sans); color: var(--ink-2);
-    background: var(--bg-soft); border: 1px solid var(--rule); border-radius: 6px;
-    padding: 0.4rem 0.55rem; cursor: pointer;
-  }
-  .prompt-card select:hover { border-color: var(--muted-2); }
-  .prompt-card button {
-    font: 600 0.88rem var(--sans);
+  .scenario .stats .muted { color: var(--muted-2); }
+  .scenario .verdict-chip { font-size: 0.7rem; font-weight: 600; }
+  .scenario .verdict-chip.ok  { color: var(--ok); }
+  .scenario .verdict-chip.bad { color: var(--bad); }
+  .scenario button {
+    margin-top: auto;
+    font: 600 0.82rem var(--sans);
     background: var(--ink); color: var(--bg);
     border: none; border-radius: 6px;
-    padding: 0.52rem 1rem; min-width: 5rem; cursor: pointer;
+    padding: 0.45rem 0.8rem; cursor: pointer;
     transition: background 0.15s, transform 0.05s;
     box-shadow: var(--shadow-sm);
   }
-  .prompt-card button:hover:not(:disabled) { background: #18181b; }
-  .prompt-card button:active:not(:disabled) { transform: translateY(0.5px); }
-  .prompt-card button:disabled { background: var(--muted-2); cursor: wait; }
-  .prompt-card .kbd {
-    font: 500 0.7rem var(--mono); color: var(--muted);
-    padding: 0.1rem 0.35rem; border: 1px solid var(--rule); border-radius: 4px;
-    background: var(--bg-soft); margin-right: 0.4rem;
-  }
+  .scenario button:hover:not(:disabled) { background: #18181b; }
+  .scenario button:active:not(:disabled) { transform: translateY(0.5px); }
+  .scenario button:disabled { background: var(--muted-2); cursor: not-allowed; }
 
   /* Topology card */
   .topology {
@@ -135,11 +140,18 @@
   }
   .topology .header-row {
     display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;
+    gap: 1rem;
   }
   .topology .header-row h2 {
     margin: 0; font-size: 0.74rem; font-weight: 600; color: var(--muted);
     letter-spacing: 0.04em; text-transform: uppercase;
   }
+  .flow-caption {
+    font: 500 0.78rem var(--mono); color: var(--ink-2);
+    min-height: 1.2rem; text-align: right; flex: 1;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .flow-caption .leg { color: var(--muted-2); margin-right: 0.45rem; }
   .topology svg { display: block; width: 100%; height: 400px; overflow: visible; }
 
   .topo-region {
@@ -191,8 +203,7 @@
   .topo-node-group.bad   .topo-icon { stroke: var(--bad); }
 
   /* Edge pulse — a short bright segment slides along the line in the
-     direction of the arrow when an event fires. Replaces the old
-     packet-circle animation. */
+     direction of the arrow when an event fires. */
   .topo-edge-pulse {
     stroke: var(--accent); stroke-width: 2.6; fill: none;
     stroke-linecap: round; stroke-dasharray: 14 200;
@@ -205,7 +216,7 @@
   .topo-edge-pulse.active { opacity: 1; }
 
   /* Runs table */
-  .runs-card { background: var(--bg); border: 1px solid var(--rule); border-radius: 12px; box-shadow: var(--shadow-sm); overflow: hidden; }
+  .runs-card { background: var(--bg); border: 1px solid var(--rule); border-radius: 12px; box-shadow: var(--shadow-sm); overflow: hidden; margin-bottom: 2rem; }
   .runs-card .header-row {
     display: flex; justify-content: space-between; align-items: center;
     padding: 1rem 1.25rem 0.75rem;
@@ -231,12 +242,16 @@
     font-size: 0.92rem; line-height: 1.45; color: var(--ink);
   }
   table.runs td.t-time { font: 500 0.78rem var(--mono); color: var(--muted); white-space: nowrap; }
-  table.runs td.t-prompt { color: var(--ink-2); font-weight: 500; }
+  table.runs td.t-scenario { color: var(--ink-2); font-weight: 500; white-space: nowrap; }
+  table.runs td.t-scenario .mode-tag {
+    font: 500 0.66rem var(--mono); color: var(--muted-2);
+    display: block; margin-top: 0.1rem; text-transform: uppercase; letter-spacing: 0.04em;
+  }
   table.runs td.t-answer { color: var(--ink); }
   table.runs td.t-answer .placeholder { color: var(--muted-2); }
   table.runs td.t-verdict { white-space: nowrap; }
 
-  /* 4-segment timing strip — Vercel-style progress indicator */
+  /* 4-segment timing strip */
   .strip {
     display: inline-grid; grid-template-columns: repeat(4, 1fr);
     gap: 3px; width: 7rem; height: 5px; margin-top: 0.55rem;
@@ -247,7 +262,7 @@
   .strip.ok span.done   { background: var(--ok); }
   .strip.bad span.done  { background: var(--bad); }
 
-  /* Real verdict badges */
+  /* Verdict badges */
   .badge {
     display: inline-flex; align-items: center; gap: 0.35rem;
     padding: 0.22rem 0.6rem 0.22rem 0.5rem;
@@ -275,9 +290,34 @@
 
   .empty-row td { padding: 2rem 1.25rem; color: var(--muted); text-align: center; font-size: 0.9rem; }
 
-  /* Stack info — small data row at the bottom */
+  /* Graph panel */
+  .graph-card {
+    background: var(--bg); border: 1px solid var(--rule); border-radius: 12px;
+    box-shadow: var(--shadow-sm); overflow: hidden; margin-bottom: 2rem;
+    display: none;
+  }
+  .graph-card.visible { display: block; }
+  .graph-card .header-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 1rem 1.25rem 0.75rem; gap: 1rem;
+  }
+  .graph-card .header-row h2 {
+    margin: 0; font-size: 0.74rem; font-weight: 600; color: var(--muted);
+    letter-spacing: 0.04em; text-transform: uppercase;
+  }
+  .graph-card .header-row .graph-meta { font: 500 0.78rem var(--mono); color: var(--ink-2); }
+  .graph-card .header-row a {
+    font: 600 0.78rem var(--sans); color: var(--accent); text-decoration: none;
+  }
+  .graph-card iframe {
+    display: block; width: 100%; height: 680px; border: none;
+    border-top: 1px solid var(--rule);
+    background: var(--bg-soft);
+  }
+
+  /* Stack info */
   .stack {
-    display: flex; flex-wrap: wrap; gap: 1.5rem; margin-top: 2.25rem;
+    display: flex; flex-wrap: wrap; gap: 1.5rem; margin-top: 0.25rem;
     padding: 1.1rem 1.25rem; background: var(--bg-soft);
     border: 1px solid var(--rule); border-radius: 10px;
     font-size: 0.82rem;
@@ -296,15 +336,19 @@
   footer a:hover { color: var(--ink); }
   footer a:not(:last-child) { margin-right: 1.25rem; }
 
-  /* tiny screens */
+  @media (max-width: 880px) {
+    .scenarios { grid-template-columns: repeat(2, 1fr); }
+  }
   @media (max-width: 720px) {
     .container { padding: 2.5rem 1.1rem 3rem; }
     h1 { font-size: 1.7rem; }
     .lede { font-size: 0.95rem; }
-    .prompt-card { flex-direction: column; align-items: stretch; }
-    .prompt-card .controls { justify-content: flex-end; }
     table.runs td.t-time { display: none; }
     .strip { width: 4.5rem; }
+    .graph-card iframe { height: 480px; }
+  }
+  @media (max-width: 520px) {
+    .scenarios { grid-template-columns: 1fr; }
   }
 </style>
 </head>
@@ -313,32 +357,30 @@
 
   <header>
     <div class="brand"><span class="dot"></span>tap-protocol</div>
-    <h1>Verified inference<span id="status" class="status">offline</span></h1>
+    <h1>Verified compute<span id="status" class="status">demo</span></h1>
     <p class="lede">
-      Send a prompt to a language model. A separate verifier <strong>independently re-runs</strong>
-      it on the same hardware and compares the output bit-for-bit. If they ever differ, you've
-      detected tampering.
+      Four AI workloads — inference, LoRA fine-tuning, speculative decoding, and a coding
+      agent — each run through a 4-node pipeline where a separate verifier
+      <strong>independently re-runs the entire workload</strong> and compares the result
+      bit-for-bit. Afterwards, every forward pass appears in the generated task graph.
     </p>
   </header>
 
-  <form class="prompt-card" onsubmit="event.preventDefault();" autocomplete="off">
-    <div class="field">
-      <label for="prompt">Prompt</label>
-      <textarea id="prompt" rows="1" placeholder="Ask the model anything…"></textarea>
+  <div class="mode-row">
+    <div class="mode-toggle" role="tablist">
+      <button id="mode-demo" class="active">Demo · replay</button>
+      <button id="mode-live">Live cluster</button>
     </div>
-    <div class="controls">
-      <select id="max-tokens" title="max response length">
-        <option value="32">32 tokens</option>
-        <option value="64">64 tokens</option>
-        <option value="128" selected>128 tokens</option>
-        <option value="256">256 tokens</option>
-      </select>
-      <button id="submit" type="button"><span class="kbd">⌘↩</span>Send</button>
-    </div>
-  </form>
+    <span id="mode-note" class="mode-note">loading recorded runs…</span>
+  </div>
+
+  <div class="scenarios" id="scenarios"></div>
 
   <div class="topology">
-    <div class="header-row"><h2>Live flow</h2></div>
+    <div class="header-row">
+      <h2>Protocol flow</h2>
+      <div id="flow-caption" class="flow-caption"></div>
+    </div>
     <svg viewBox="0 0 700 420" preserveAspectRatio="xMidYMid meet">
       <defs>
         <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
@@ -354,8 +396,6 @@
       <text class="topo-region-label" x="430" y="74">Datacenter · single H100</text>
 
       <!-- LEFT COLUMN: You / Gateway / Tap stacked vertically -->
-
-      <!-- Node: You -->
       <g id="topo-you" class="topo-node-group">
         <rect class="topo-node" x="60" y="30" width="140" height="56" rx="6"/>
         <g class="topo-icon" transform="translate(80 46)">
@@ -369,7 +409,6 @@
         <text class="topo-sub" x="138" y="74">browser</text>
       </g>
 
-      <!-- Node: Gateway -->
       <g id="topo-gateway" class="topo-node-group">
         <rect class="topo-node" x="60" y="160" width="140" height="56" rx="6"/>
         <g class="topo-icon" transform="translate(80 178)">
@@ -382,7 +421,6 @@
         <text class="topo-sub" x="138" y="204">signs request</text>
       </g>
 
-      <!-- Node: Tap -->
       <g id="topo-tap" class="topo-node-group">
         <rect class="topo-node" x="60" y="290" width="140" height="56" rx="6"/>
         <g class="topo-icon" transform="translate(80 306)">
@@ -395,9 +433,7 @@
         <text class="topo-sub" x="138" y="334">relay &amp; mirror</text>
       </g>
 
-      <!-- RIGHT REGION: Model on top, Verifier below — both inside the Datacenter -->
-
-      <!-- Node: Model -->
+      <!-- RIGHT REGION: Model on top, Verifier below -->
       <g id="topo-host" class="topo-node-group">
         <rect class="topo-node" x="440" y="118" width="220" height="62" rx="6"/>
         <g class="topo-icon" transform="translate(458 138)">
@@ -411,11 +447,10 @@
           <line x1="6"  y1="16" x2="6"  y2="18"/>
           <line x1="12" y1="16" x2="12" y2="18"/>
         </g>
-        <text class="topo-label" x="550" y="151">Model</text>
-        <text class="topo-sub" x="550" y="167">Qwen3 generates tokens</text>
+        <text class="topo-label" x="550" y="151">Host</text>
+        <text class="topo-sub" x="550" y="167">runs the whole workload</text>
       </g>
 
-      <!-- Node: Verifier -->
       <g id="topo-recomp" class="topo-node-group">
         <rect class="topo-node" x="440" y="258" width="220" height="62" rx="6"/>
         <g class="topo-icon" transform="translate(458 278)">
@@ -423,23 +458,16 @@
           <polyline points="5.5,9 8,11.5 12.5,7"/>
         </g>
         <text class="topo-label" x="550" y="291">Verifier</text>
-        <text class="topo-sub" x="550" y="307">re-runs &amp; compares output</text>
+        <text class="topo-sub" x="550" y="307">re-runs it all &amp; compares digests</text>
       </g>
 
-      <!-- Vertical edges within left column.
-           Forward (down) on the right side of the column;
-           return (up) on the left side. -->
+      <!-- Edges -->
       <line class="topo-edge" id="edge-you-gateway"  x1="150" y1="86"  x2="150" y2="160" marker-end="url(#ah)"/>
       <line class="topo-edge" id="edge-gateway-tap"  x1="150" y1="216" x2="150" y2="290" marker-end="url(#ah)"/>
       <line class="topo-edge" id="edge-gateway-you"  x1="110" y1="160" x2="110" y2="86"  marker-end="url(#ah)"/>
       <line class="topo-edge" id="edge-tap-gateway"  x1="110" y1="290" x2="110" y2="216" marker-end="url(#ah)"/>
-
-      <!-- Horizontal edges from Tap into the Datacenter.
-           Forward (top) Tap→Model; return (bottom) Model→Tap. -->
       <line class="topo-edge" id="edge-tap-host"     x1="200" y1="312" x2="440" y2="142" marker-end="url(#ah)"/>
       <line class="topo-edge" id="edge-host-tap"     x1="440" y1="156" x2="200" y2="326" marker-end="url(#ah)"/>
-
-      <!-- Async copy: Tap → Verifier (dashed) -->
       <line class="topo-edge async" id="edge-tap-recomp" x1="200" y1="332" x2="440" y2="284" marker-end="url(#ah-async)"/>
 
       <!-- Pulse overlays -->
@@ -451,9 +479,9 @@
       <line class="topo-edge-pulse" id="edge-pulse-host-tap"    pathLength="100" x1="440" y1="156" x2="200" y2="326"/>
       <line class="topo-edge-pulse" id="edge-pulse-tap-recomp"  pathLength="100" x1="200" y1="332" x2="440" y2="284"/>
 
-      <!-- Edge labels — nudged outward past the box edges to keep clear of the box text. -->
-      <text class="topo-edge-label" x="195" y="127" text-anchor="start">prompt</text>
-      <text class="topo-edge-label"  x="65" y="127" text-anchor="end">answer</text>
+      <!-- Edge labels -->
+      <text class="topo-edge-label" x="195" y="127" text-anchor="start">workload</text>
+      <text class="topo-edge-label"  x="65" y="127" text-anchor="end">result</text>
       <text class="topo-edge-label" x="195" y="245" text-anchor="start"><tspan x="195" dy="0">signed</tspan><tspan x="195" dy="11">envelope</tspan></text>
       <text class="topo-edge-label"  x="65" y="245" text-anchor="end"><tspan x="65" dy="0">signed</tspan><tspan x="65" dy="11">reply</tspan></text>
       <text class="topo-edge-label" x="320" y="358" transform="rotate(-12 320 358)">async copy</text>
@@ -465,24 +493,33 @@
     <table class="runs">
       <thead>
         <tr>
-          <th class="t-time">Sent</th>
-          <th class="t-prompt">Prompt</th>
-          <th class="t-answer">Answer</th>
+          <th class="t-time">Started</th>
+          <th class="t-scenario">Scenario</th>
+          <th class="t-answer">Result</th>
           <th>Progress</th>
           <th class="t-verdict">Verifier</th>
         </tr>
       </thead>
       <tbody id="runs-body">
-        <tr class="empty-row"><td colspan="5">Send a prompt to see it flow through.</td></tr>
+        <tr class="empty-row"><td colspan="5">Pick a scenario above to watch it flow through.</td></tr>
       </tbody>
     </table>
   </div>
 
-  <div class="stack">
-    <div class="item"><span class="lbl">Model</span><span class="val">Qwen3-1.7B</span></div>
+  <div class="graph-card" id="graph-card">
+    <div class="header-row">
+      <h2>Generated task graph</h2>
+      <span class="graph-meta" id="graph-meta"></span>
+      <a id="graph-open" href="#" target="_blank" rel="noopener">Open full ↗</a>
+    </div>
+    <iframe id="graph-frame" title="task graph"></iframe>
+  </div>
+
+  <div class="stack" id="stack">
+    <div class="item"><span class="lbl">Models</span><span class="val">Qwen3-1.7B · 0.6B (draft) · 8B (agent)</span></div>
     <div class="item"><span class="lbl">Hardware</span><span class="val">H100 SXM · single GPU</span></div>
-    <div class="item"><span class="lbl">Backend</span><span class="val">vLLM 0.17.1</span></div>
-    <div class="item"><span class="lbl">Determinism</span><span class="val">enforce_eager · FLASH_ATTN · batch_inv · seed=42</span></div>
+    <div class="item"><span class="lbl">Determinism</span><span class="val">deterministic kernels · eager attention · greedy · seed=0</span></div>
+    <div class="item"><span class="lbl">Verification</span><span class="val">full re-run · canonical capture sha256</span></div>
   </div>
 
   <footer>
@@ -496,25 +533,47 @@
 
 <script>
 const $ = (id) => document.getElementById(id);
-const tbody = $("runs-body");
-const submitBtn = $("submit"), promptInput = $("prompt"), maxTokens = $("max-tokens"), statusEl = $("status");
+const tbody = $("runs-body"), statusEl = $("status"), modeNote = $("mode-note");
+const flowCaption = $("flow-caption");
 
-// Track requests by gateway id (filled in by the events stream) AND by a
-// local "pending" placeholder while we wait for the first event.
-const rows = new Map();          // id -> { tr, model, summary state }
-let pending = null;              // { tempKey, prompt, ... } before id is known
+// ----------------------------------------------------------------------
+// Scenario metadata. Stats are filled from data/demo-manifest.json
+// (written by scripts/record_demo_data.py from an actual recorded run).
+const SCENARIOS = [
+  { key: "inference", title: "Inference",
+    desc: "Greedy decode of a prompt — one node per forward pass." },
+  { key: "training", title: "LoRA training",
+    desc: "A real toy-scale fine-tune; the verifier re-trains and the losses must match bit-for-bit." },
+  { key: "spec", title: "Speculative decoding",
+    desc: "A 0.6B draft proposes tokens, the 1.7B target verifies each round." },
+  { key: "coding", title: "Coding agent",
+    desc: "Parallel reads, plans and codegen; really runs the generated tests, fixes, goes green." },
+];
+const DEFAULT_PARAMS = {
+  inference: { prompt: "The capital of France is", max_tokens: 12 },
+  spec: { prompt: "The key idea behind bitwise-deterministic inference is", max_tokens: 48, k: 4 },
+  training: {},
+  coding: {},
+};
+
+let MODE = "demo";          // "demo" | "live"
+let MANIFEST = null;        // data/demo-manifest.json
+let busy = false;           // one animated run at a time
+let eventSource = null;     // live SSE
+const rows = new Map();     // run id (or replay key) -> row model
+const liveRuns = new Map(); // live gateway id -> workload key
 
 function setStatus(state, label) {
-  statusEl.className = "status " + state;
+  statusEl.className = "status " + (state || "");
   statusEl.textContent = label;
 }
 
-function escapeHtml(s) {
-  return (s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"})[c]);
-}
-
-function shortHex(s) {
-  return s ? s.replace(/^sha256:/, "").slice(0, 10) : "—";
+function fmtFlops(f) {
+  if (f >= 1e15) return (f / 1e15).toFixed(2) + " PFLOP";
+  if (f >= 1e12) return (f / 1e12).toFixed(2) + " TFLOP";
+  if (f >= 1e9)  return (f / 1e9).toFixed(2) + " GFLOP";
+  if (f >= 1e6)  return (f / 1e6).toFixed(2) + " MFLOP";
+  return (f || 0).toLocaleString() + " FLOP";
 }
 
 function fmtTime(ts) {
@@ -522,28 +581,21 @@ function fmtTime(ts) {
   return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
 }
 
-function summarize(s, n = 180) {
+function shortHex(s) { return s ? s.replace(/^sha256:/, "").slice(0, 10) : "—"; }
+
+function summarizeText(s, n = 160) {
   if (!s) return "";
-  // collapse newlines for table view; full text shown on hover
   const flat = s.replace(/\s+/g, " ").trim();
   return flat.length > n ? flat.slice(0, n - 1) + "…" : flat;
 }
 
-// ---------------------------------------------------------------------
-// Topology animation: each protocol event triggers a moving "pulse"
-// segment that slides along the arrow's pulse-overlay line in the
-// direction of the arrowhead. Implemented via the Web Animations API
-// on the line's stroke-dashoffset (the line is pathLength="100" so
-// dash math is in normalized units regardless of actual length).
-
+// ----------------------------------------------------------------------
+// Topology animation (pulse machinery — unchanged from the single-prompt demo)
 const EDGE_OF = {
-  "you-gateway":     "edge-you-gateway",
-  "gateway-tap":     "edge-gateway-tap",
-  "tap-host":        "edge-tap-host",
-  "host-tap":        "edge-host-tap",
-  "tap-gateway":     "edge-tap-gateway",
-  "gateway-you":     "edge-gateway-you",
-  "tap-recomp":      "edge-tap-recomp",
+  "you-gateway": "edge-you-gateway", "gateway-tap": "edge-gateway-tap",
+  "tap-host": "edge-tap-host", "host-tap": "edge-host-tap",
+  "tap-gateway": "edge-tap-gateway", "gateway-you": "edge-gateway-you",
+  "tap-recomp": "edge-tap-recomp",
 };
 
 function flashNode(name, mode = "active", durationMs = 700) {
@@ -568,39 +620,32 @@ function pulseEdge(from, to, opts = {}) {
   if (!pulse) return;
   const dur = opts.dur ?? 650;
   const kind = opts.kind;
-
-  // Apply variant color (ok/bad) before fade-in.
   pulse.classList.remove("ok", "bad");
   if (kind === "ok" || kind === "bad") pulse.classList.add(kind);
-
-  // Fade in, animate the dash sliding from source-end to dest-end,
-  // then fade out. The dasharray is "14 200" in CSS — at offset 14 the
-  // segment is fully before the path; at offset -100 it has exited
-  // past the destination.
   pulse.classList.add("active");
   const anim = pulse.animate(
-    [
-      { strokeDashoffset: 14 },
-      { strokeDashoffset: -100 },
-    ],
+    [{ strokeDashoffset: 14 }, { strokeDashoffset: -100 }],
     { duration: dur, easing: "cubic-bezier(.35, 0, .2, 1)", fill: "forwards" },
   );
   anim.addEventListener("finish", () => {
     pulse.classList.remove("active");
-    // Reset for the next firing; small timeout so the fade-out is visible.
     setTimeout(() => { pulse.style.strokeDashoffset = ""; pulse.classList.remove("ok", "bad"); }, 180);
   });
-
   flashEdge(key, dur);
   flashNode(from, "active", dur);
   setTimeout(() => flashNode(to, kind ?? "active", 600), dur * 0.8);
 }
 
-// Build an empty row, prepend it, return the model object
-function newRow({ id = null, prompt = "", ts = Date.now() / 1000 } = {}) {
-  // Remove the empty-state row if present
-  if (tbody.children.length === 1 && tbody.children[0].cells.length === 1) tbody.innerHTML = "";
+// ----------------------------------------------------------------------
+// Runs table
+const BADGE = {
+  ok:   `<span class="badge ok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Verified</span>`,
+  bad:  `<span class="badge bad"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>Mismatch</span>`,
+  warm: `<span class="badge warm"><span class="spin"></span>Verifying…</span>`,
+};
 
+function newRow({ key, workload, label, modeTag }) {
+  if (tbody.children.length === 1 && tbody.children[0].cells.length === 1) tbody.innerHTML = "";
   const tr = document.createElement("tr");
   tr.className = "current";
   const dtr = document.createElement("tr");
@@ -608,47 +653,32 @@ function newRow({ id = null, prompt = "", ts = Date.now() / 1000 } = {}) {
   dtr.style.display = "none";
 
   const m = {
-    id, prompt, ts,
-    answer: "", hostDigest: "", recompDigest: "",
-    verdict: "pending",
+    key, workload, label,
+    hostDigest: "", recompDigest: "", verdict: "pending",
     stages: { signed: false, sent_to_host: false, host_done: false, returned: false, verified: false },
     tr, dtr,
   };
-
-  // initial cells
   tr.innerHTML = `
-    <td class="t-time">${fmtTime(ts)}</td>
-    <td class="t-prompt"></td>
+    <td class="t-time">${fmtTime()}</td>
+    <td class="t-scenario"></td>
     <td class="t-answer"><span class="placeholder">…</span></td>
     <td><span class="strip pending"><span></span><span></span><span></span><span></span></span></td>
     <td class="t-verdict">${BADGE.warm}</td>`;
-  tr.cells[1].textContent = prompt;
-  // digest row
+  tr.cells[1].innerHTML = `${label}<span class="mode-tag">${modeTag}</span>`;
   dtr.innerHTML = `<td></td><td colspan="4"><span class="pair"></span></td>`;
-
   tbody.insertBefore(dtr, tbody.firstChild);
   tbody.insertBefore(tr, tbody.firstChild);
-  // de-emphasize the previous current row (if any)
   for (const old of tbody.querySelectorAll("tr.current")) if (old !== tr) old.classList.remove("current");
   return m;
 }
 
 function setStage(m, stageKey) {
   m.stages[stageKey] = true;
-  // Map 5 internal stages to 4 visual segments:
-  //   seg 1 = signed
-  //   seg 2 = sent_to_host
-  //   seg 3 = host_done & returned
-  //   seg 4 = verified
-  const strip = m.tr.querySelector(".strip");
-  const segs = strip.querySelectorAll("span");
-  const fillStrip = () => {
-    segs[0].classList.toggle("done", m.stages.signed);
-    segs[1].classList.toggle("done", m.stages.sent_to_host);
-    segs[2].classList.toggle("done", m.stages.host_done && m.stages.returned);
-    segs[3].classList.toggle("done", m.stages.verified);
-  };
-  fillStrip();
+  const segs = m.tr.querySelector(".strip").querySelectorAll("span");
+  segs[0].classList.toggle("done", m.stages.signed);
+  segs[1].classList.toggle("done", m.stages.sent_to_host);
+  segs[2].classList.toggle("done", m.stages.host_done && m.stages.returned);
+  segs[3].classList.toggle("done", m.stages.verified);
 }
 
 function renderDigest(m) {
@@ -658,199 +688,334 @@ function renderDigest(m) {
   pair.innerHTML = "";
   if (m.hostDigest) {
     const a = document.createElement("span");
-    a.innerHTML = `<span class="lbl">host</span>sha256:${shortHex(m.hostDigest)}`;
+    a.innerHTML = `<span class="lbl">host capture</span>sha256:${shortHex(m.hostDigest)}`;
     pair.appendChild(a);
   }
-  if (m.recompDigest) {
+  if (m.verdict === "bad") {
     const b = document.createElement("span");
-    if (m.verdict === "bad") {
-      b.className = "verifier-bad";
-      b.innerHTML = `<span class="lbl">verifier</span>sha256:${shortHex(m.recompDigest)} ◀ differs`;
-    } else if (m.verdict === "ok") {
-      b.className = "verifier-ok";
-      b.innerHTML = `<span class="lbl">verifier</span>matches`;
-    } else {
-      b.innerHTML = `<span class="lbl">verifier</span>sha256:${shortHex(m.recompDigest)}`;
-    }
+    b.className = "verifier-bad";
+    b.innerHTML = `<span class="lbl">verifier re-run</span>sha256:${shortHex(m.recompDigest)} ◀ differs`;
+    pair.appendChild(b);
+  } else if (m.verdict === "ok") {
+    const b = document.createElement("span");
+    b.className = "verifier-ok";
+    b.innerHTML = `<span class="lbl">verifier re-run</span>bitwise match`;
     pair.appendChild(b);
   }
 }
-
-// Inline SVG badge components — used in the verdict cell.
-const BADGE = {
-  ok:   `<span class="badge ok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Verified</span>`,
-  bad:  `<span class="badge bad"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>Mismatch</span>`,
-  warm: `<span class="badge warm"><span class="spin"></span>Verifying…</span>`,
-};
 
 function setVerdict(m, verdict) {
   m.verdict = verdict;
   const strip = m.tr.querySelector(".strip");
   strip.classList.remove("pending", "ok", "bad");
-  const verdictCell = m.tr.cells[4];
-  verdictCell.className = "t-verdict";
+  const cell = m.tr.cells[4];
   if (verdict === "ok") {
-    strip.classList.add("ok");
-    verdictCell.innerHTML = BADGE.ok;
+    strip.classList.add("ok"); cell.innerHTML = BADGE.ok;
     m.tr.classList.remove("current", "alarm");
   } else if (verdict === "bad") {
-    strip.classList.add("bad");
-    verdictCell.innerHTML = BADGE.bad;
-    m.tr.classList.remove("current");
-    m.tr.classList.add("alarm");
-  } else {
-    verdictCell.innerHTML = BADGE.warm;
-  }
+    strip.classList.add("bad"); cell.innerHTML = BADGE.bad;
+    m.tr.classList.remove("current"); m.tr.classList.add("alarm");
+  } else cell.innerHTML = BADGE.warm;
   renderDigest(m);
 }
 
-function setAnswer(m, text) {
-  m.answer = text;
+function setResult(m, text) {
+  if (!text) return;
   const cell = m.tr.cells[2];
-  if (text) {
-    cell.textContent = summarize(text, 160);
-    cell.title = text;  // full text on hover
+  cell.textContent = summarizeText(text);
+  cell.title = text;
+}
+
+function summaryPreview(workload, s) {
+  if (!s) return "";
+  switch (workload) {
+    case "inference": return s.output_preview || `${s.forward_passes} forward passes`;
+    case "spec": return `${s.tokens} tokens — ${s.drafts_accepted} drafts accepted across ${s.rounds} rounds: “${(s.output_preview || "").trim()}”`;
+    case "training": return `loss ${s.first_loss?.toFixed?.(2) ?? s.first_loss} → ${s.final_loss?.toFixed?.(2) ?? s.final_loss} over ${s.steps} steps · last eval: “${(s.last_eval || "").trim()}”`;
+    case "coding": return `${s.calls} LLM calls, ${s.forward_passes} forward passes — tests ${s.tests_passed ? "PASSED" : "failed"} after ${s.fix_rounds} fix round(s)`;
+    default: return "";
   }
 }
 
-// ---------------------------------------------------------------------
-// Live event stream → table state machine
-function startEvents() {
-  setStatus("warm", "connecting");
-  const src = new EventSource("/api/events");
-  src.onopen = () => setStatus("on", "live");
-  src.onerror = () => setStatus("warm", "reconnecting");
-  src.onmessage = (msg) => {
-    let evt;
-    try {
-      evt = JSON.parse(msg.data);
-    } catch (e) {
-      // Defense-in-depth: a silent return here once hid a real proxy bug
-      // (heartbeat interleaving inside a data line). Make future parse
-      // failures loud so they show up in the validator.
-      console.warn("SSE parse error", e.message, "raw:", msg.data?.slice?.(0, 200));
-      return;
-    }
-
-    if (evt.type === "offline") {
-      setStatus("bad", evt.reason || "offline");
-      return;
-    }
-
-    // Skip animating events from the SSE backlog so a fresh page-load
-    // doesn't trigger 80 packets at once. The Tap timestamps are wall-clock
-    // seconds; anything older than ~6s is replay.
-    const isReplay = evt.ts && (Date.now() / 1000 - evt.ts) > 6;
-
-    let m = rows.get(evt.id);
-    switch (evt.type) {
-      case "request_sent":
-        if (pending && pending.prompt === evt.prompt) {
-          m = pending;
-          m.id = evt.id;
-          m.ts = evt.ts;
-          m.tr.cells[0].textContent = fmtTime(evt.ts);
-          pending = null;
-        }
-        if (!m) {
-          m = newRow({ id: evt.id, prompt: evt.prompt, ts: evt.ts });
-        }
-        rows.set(evt.id, m);
-        if (!isReplay) pulseEdge("you", "gateway");
-        break;
-      case "gateway_signed":
-        if (m) setStage(m, "signed");
-        if (!isReplay) flashNode("gateway", "active", 500);
-        break;
-      case "tap_received":
-        if (!isReplay) pulseEdge("gateway", "tap");
-        break;
-      case "tap_relayed_request":
-        if (m) setStage(m, "sent_to_host");
-        if (!isReplay) pulseEdge("tap", "host", { dur: 800 });
-        break;
-      case "host_completed":
-        if (m) {
-          m.hostDigest = evt.output_sha256 || m.hostDigest;
-          if (evt.output_preview) setAnswer(m, evt.output_preview);
-          setStage(m, "host_done");
-        }
-        if (!isReplay) flashNode("host", "active", 1100);
-        break;
-      case "tap_relayed_response":
-        if (!isReplay) pulseEdge("host", "tap", { dur: 700 });
-        break;
-      case "client_received":
-        if (m) {
-          if (evt.output_preview) setAnswer(m, evt.output_preview);
-          setStage(m, "returned");
-        }
-        if (!isReplay) {
-          pulseEdge("tap", "gateway");
-          setTimeout(() => pulseEdge("gateway", "you"), 650);
-        }
-        break;
-      case "tap_verify_started":
-        if (!isReplay) pulseEdge("tap", "recomp", { dur: 900 });
-        break;
-      case "recomp_verified":
-        if (m) {
-          m.recompDigest = evt.actual_sha256 || m.recompDigest;
-          setStage(m, "verified");
-          setVerdict(m, evt.is_verified ? "ok" : "bad");
-        }
-        if (!isReplay) flashNode("recomp", evt.is_verified ? "ok" : "bad", 1500);
-        break;
-    }
-  };
-  return src;
+function progressCaption(progress) {
+  const p = progress || {};
+  switch (p.type) {
+    case "token": return `forward pass ${p.i}/${p.of}`;
+    case "round": return `round ${p.round} — ${p.accepted}/${p.k} drafts accepted · ${p.committed}/${p.max_tokens} tokens`;
+    case "step":  return `step ${p.step + 1}/${p.of} — loss ${Number(p.loss).toFixed(3)}`;
+    case "eval":  return `eval after step ${p.after_step}: “${summarizeText(p.text, 60)}”`;
+    case "call":  return `call ${p.call + 1}: ${p.phase}`;
+    case "tests": return `running generated tests — ${p.passed ? "GREEN" : "red"}${p.round ? ` (fix round ${p.round})` : ""}`;
+    default: return "";
+  }
 }
 
-// ---------------------------------------------------------------------
-// Submit
-async function submit() {
-  const text = promptInput.value.trim();
-  if (!text) { promptInput.focus(); return; }
-  submitBtn.disabled = true;
-  submitBtn.textContent = "Sending…";
-  promptInput.disabled = true;
+function setCaption(leg, text) {
+  flowCaption.innerHTML = text
+    ? `<span class="leg">${leg}</span>${text.replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"})[c])}`
+    : "";
+}
 
-  // local placeholder until the events stream claims it by prompt match
-  pending = newRow({ prompt: text });
+// ----------------------------------------------------------------------
+// Graph panel
+function showGraph(workload, src, meta) {
+  const card = $("graph-card");
+  const url = `graph/?scene=${encodeURIComponent(workload)}&src=${encodeURIComponent(src)}`;
+  $("graph-frame").src = url;
+  $("graph-open").href = url;
+  $("graph-meta").textContent = meta || "";
+  card.classList.add("visible");
+  card.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
 
+// ----------------------------------------------------------------------
+// Shared event handler — one state machine for replayed AND live events.
+function handleEvent(evt, animate) {
+  const m = rows.get(evt._rowKey ?? evt.id);
+  switch (evt.type) {
+    case "request_sent":
+      if (animate) pulseEdge("you", "gateway");
+      break;
+    case "gateway_signed":
+      if (m) setStage(m, "signed");
+      if (animate) flashNode("gateway", "active", 500);
+      break;
+    case "tap_received":
+      if (animate) pulseEdge("gateway", "tap");
+      break;
+    case "tap_relayed_request":
+      if (m) setStage(m, "sent_to_host");
+      if (animate) pulseEdge("tap", "host", { dur: 800 });
+      break;
+    case "host_progress":
+      if (animate) { flashNode("host", "active", 420); setCaption("host", progressCaption(evt.progress)); }
+      break;
+    case "host_completed":
+      if (m) {
+        m.hostDigest = evt.capture_digest || evt.output_sha256 || m.hostDigest;
+        setResult(m, summaryPreview(m.workload, evt.summary) || evt.output_preview);
+        setStage(m, "host_done");
+        renderDigest(m);
+      }
+      if (animate) { flashNode("host", "active", 1100); setCaption("host", "workload complete — capture signed"); }
+      break;
+    case "tap_relayed_response":
+      if (animate) pulseEdge("host", "tap", { dur: 700 });
+      break;
+    case "client_received":
+      if (m) setStage(m, "returned");
+      if (animate) { pulseEdge("tap", "gateway"); setTimeout(() => pulseEdge("gateway", "you"), 650); }
+      break;
+    case "tap_verify_started":
+      if (animate) { pulseEdge("tap", "recomp", { dur: 900 }); setCaption("verifier", "independent re-run started"); }
+      break;
+    case "recomp_progress":
+      if (animate) { flashNode("recomp", "active", 420); setCaption("verifier", progressCaption(evt.progress)); }
+      break;
+    case "recomp_verified":
+      if (m) {
+        m.recompDigest = evt.actual_sha256 || m.recompDigest;
+        setStage(m, "verified");
+        setVerdict(m, evt.is_verified ? "ok" : "bad");
+      }
+      if (animate) {
+        flashNode("recomp", evt.is_verified ? "ok" : "bad", 1500);
+        setCaption("verifier", evt.is_verified ? "re-run matches bit-for-bit ✓" : "DIGEST MISMATCH — alarm raised");
+      }
+      break;
+  }
+}
+
+// ----------------------------------------------------------------------
+// Demo mode: replay a recorded event stream with scaled pacing.
+function replayDelays(events) {
+  // Real streams have minutes-long gaps (a GPU training run); mock streams
+  // have ~0ms gaps. Pacing is therefore synthesized, not proportional:
+  // lifecycle events get a beat, progress events split a fixed budget.
+  const LIFECYCLE_MS = 750, PROGRESS_BUDGET_MS = 9000, MIN_MS = 60, MAX_MS = 900;
+  const nProgress = events.filter(e => e.type.endsWith("_progress")).length || 1;
+  const per = Math.min(MAX_MS, Math.max(MIN_MS, PROGRESS_BUDGET_MS / nProgress));
+  return events.map(e => e.type.endsWith("_progress") ? per : LIFECYCLE_MS);
+}
+
+async function replayScenario(wl) {
+  if (busy) return;
+  busy = true;
+  setScenarioRunning(wl, true);
   try {
-    const r = await fetch("/api/inference", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt: text, max_tokens: Number(maxTokens.value) || 128 }),
+    const doc = await (await fetch(`data/${wl}.events.json`)).json();
+    const sc = MANIFEST?.scenarios?.[wl];
+    const key = `replay-${wl}-${Date.now()}`;
+    const m = newRow({ key, workload: wl, label: titleOf(wl),
+                       modeTag: `replay · ${doc.source}` });
+    rows.set(key, m);
+    const delays = replayDelays(doc.events);
+    for (let i = 0; i < doc.events.length; i++) {
+      handleEvent({ ...doc.events[i], _rowKey: key }, true);
+      await new Promise(r => setTimeout(r, delays[i]));
+    }
+    if (sc) {
+      const src = "../data/protocol-graphs.json";
+      showGraph(wl, src,
+        `${sc.forward_passes.toLocaleString()} forward passes · ${fmtFlops(sc.total_flops)} · recorded ${doc.source} run`);
+    }
+  } catch (e) {
+    console.error("replay failed", e);
+    setCaption("error", String(e.message || e));
+  } finally {
+    busy = false;                      // before setScenarioRunning: it re-renders buttons
+    setScenarioRunning(wl, false);
+  }
+}
+
+// ----------------------------------------------------------------------
+// Live mode: real runs against the cluster behind /api/*.
+function ensureEventSource() {
+  if (eventSource) return;
+  eventSource = new EventSource("/api/events");
+  eventSource.onerror = () => { if (MODE === "live") setStatus("warm", "reconnecting"); };
+  eventSource.onopen = () => { if (MODE === "live") setStatus("on", "live"); };
+  eventSource.onmessage = (msg) => {
+    let evt;
+    try { evt = JSON.parse(msg.data); }
+    catch (e) { console.warn("SSE parse error", e.message); return; }
+    if (evt.type === "offline") { setStatus("bad", evt.reason || "offline"); return; }
+    if (!liveRuns.has(evt.id)) return;          // not one of ours
+    const fresh = !evt.ts || (Date.now() / 1000 - evt.ts) < 6;
+    handleEvent({ ...evt, _rowKey: "live-" + evt.id }, fresh);
+    if (evt.type === "recomp_verified") {
+      const wl = liveRuns.get(evt.id);
+      showGraph(wl, `../api/graph?id=${evt.id}`, `live run #${evt.id}`);
+      busy = false;                    // before setScenarioRunning: it re-renders buttons
+      setScenarioRunning(wl, false);
+    }
+  };
+}
+
+async function runLive(wl) {
+  if (busy) return;
+  busy = true;
+  setScenarioRunning(wl, true);
+  try {
+    const r = await fetch("/api/run", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workload: wl, params: DEFAULT_PARAMS[wl] }),
     });
     const data = await r.json();
     if (!r.ok) throw new Error(data?.error || `HTTP ${r.status}`);
-    // If the events stream hasn't taken over yet, paint the answer ourselves.
-    if (pending && !pending.answer) {
-      setAnswer(pending, data.output);
-    }
+    const m = newRow({ key: "live-" + data.id, workload: wl,
+                       label: titleOf(wl), modeTag: `live · run #${data.id}` });
+    rows.set("live-" + data.id, m);
+    liveRuns.set(data.id, wl);
+    ensureEventSource();
   } catch (e) {
-    if (pending) {
-      pending.tr.cells[4].className = "t-verdict verdict-bad";
-      pending.tr.cells[4].textContent = "cluster unreachable";
-      pending.tr.cells[4].title = e.message;
-      pending = null;
-    }
-  } finally {
-    submitBtn.disabled = false;
-    submitBtn.textContent = "Send";
-    promptInput.disabled = false;
-    promptInput.value = "";
-    promptInput.focus();
+    setCaption("error", String(e.message || e));
+    busy = false;                      // before setScenarioRunning: it re-renders buttons
+    setScenarioRunning(wl, false);
   }
 }
-submitBtn.addEventListener("click", submit);
-promptInput.addEventListener("keydown", (e) => {
-  if ((e.metaKey || e.ctrlKey) && e.key === "Enter") submit();
-});
 
-startEvents();
+// ----------------------------------------------------------------------
+// Scenario cards
+function titleOf(wl) { return SCENARIOS.find(s => s.key === wl)?.title || wl; }
+
+function setScenarioRunning(wl, running) {
+  const card = document.querySelector(`.scenario[data-wl="${wl}"]`);
+  if (card) card.classList.toggle("running", running);
+  for (const b of document.querySelectorAll(".scenario button"))
+    b.disabled = running || (MODE === "live" && !LIVE_OK);
+  if (!running) updateButtons();
+}
+
+function renderScenarios() {
+  const root = $("scenarios");
+  root.innerHTML = "";
+  for (const s of SCENARIOS) {
+    const sc = MANIFEST?.scenarios?.[s.key];
+    const card = document.createElement("div");
+    card.className = "scenario";
+    card.dataset.wl = s.key;
+    const stats = sc ? `
+      <div class="stats">
+        <span>${sc.forward_passes.toLocaleString()} forward passes · ${fmtFlops(sc.total_flops)}</span>
+        <span class="muted">${sc.models.map(m => m.replace(/^hf:\/\//, "").replace("Qwen/", "")).join(" + ")}</span>
+        <span class="verdict-chip ${sc.is_verified ? "ok" : "bad"}">${sc.is_verified ? "✓ re-run verified bit-for-bit" : "✗ verification failed"}</span>
+      </div>` : `<div class="stats"><span class="muted">no recorded data</span></div>`;
+    card.innerHTML = `
+      <h3>${s.title}</h3>
+      <div class="desc">${s.desc}</div>
+      ${stats}
+      <button data-wl="${s.key}"></button>`;
+    root.appendChild(card);
+  }
+  for (const b of document.querySelectorAll(".scenario button"))
+    b.addEventListener("click", () => MODE === "demo" ? replayScenario(b.dataset.wl) : runLive(b.dataset.wl));
+  updateButtons();
+}
+
+function updateButtons() {
+  for (const b of document.querySelectorAll(".scenario button")) {
+    if (MODE === "demo") {
+      b.textContent = "▶ Replay recorded run";
+      b.disabled = busy || !MANIFEST;
+    } else {
+      b.textContent = "▶ Run live on cluster";
+      b.disabled = busy || !LIVE_OK;
+    }
+  }
+}
+
+// ----------------------------------------------------------------------
+// Mode switching
+let LIVE_OK = false;
+
+async function probeLive() {
+  try {
+    const r = await fetch("/api/health");
+    LIVE_OK = r.ok;
+  } catch { LIVE_OK = false; }
+  return LIVE_OK;
+}
+
+async function setMode(mode) {
+  MODE = mode;
+  $("mode-demo").classList.toggle("active", mode === "demo");
+  $("mode-live").classList.toggle("active", mode === "live");
+  if (mode === "demo") {
+    const src = MANIFEST?.source || "—";
+    setStatus("", "demo");
+    modeNote.innerHTML = MANIFEST
+      ? `replaying a recorded <span class="src">${src}</span> run — no cluster needed`
+      : "recorded data unavailable";
+  } else {
+    setStatus("warm", "probing");
+    modeNote.textContent = "checking for a live cluster…";
+    const ok = await probeLive();
+    if (MODE !== "live") return;   // user toggled away mid-probe
+    if (ok) {
+      setStatus("on", "live");
+      modeNote.textContent = "connected — runs execute on the real cluster (a coding run takes a while)";
+      ensureEventSource();
+    } else {
+      setStatus("bad", "offline");
+      modeNote.textContent = "no cluster behind this deployment right now — switch back to Demo to replay the recorded runs";
+    }
+  }
+  updateButtons();
+}
+
+$("mode-demo").addEventListener("click", () => setMode("demo"));
+$("mode-live").addEventListener("click", () => setMode("live"));
+
+// ----------------------------------------------------------------------
+// Boot
+(async function boot() {
+  try {
+    MANIFEST = await (await fetch("data/demo-manifest.json")).json();
+  } catch { MANIFEST = null; }
+  renderScenarios();
+  setMode("demo");
+})();
 </script>
 </body>
 </html>

@@ -1,0 +1,438 @@
+{
+ "workload": "coding",
+ "source": "mock",
+ "events": [
+  {
+   "ts": 0.0,
+   "type": "request_sent",
+   "id": 4,
+   "workload": "coding",
+   "params": {}
+  },
+  {
+   "ts": 0.0,
+   "type": "gateway_signed",
+   "id": 4,
+   "workload": "coding",
+   "signature_prefix": "02b27e32c5a9"
+  },
+  {
+   "ts": 0.0,
+   "type": "tap_received",
+   "id": 4,
+   "workload": "coding"
+  },
+  {
+   "ts": 0.0,
+   "type": "tap_relayed_request",
+   "id": 4,
+   "workload": "coding"
+  },
+  {
+   "ts": 0.078,
+   "type": "host_progress",
+   "id": 4,
+   "workload": "coding",
+   "progress": {
+    "call": 0,
+    "gen_tokens": 25,
+    "phase": "read prompt, orient",
+    "prompt_tokens": 134,
+    "role": "reason",
+    "type": "call"
+   }
+  },
+  {
+   "ts": 0.079,
+   "type": "host_progress",
+   "id": 4,
+   "workload": "coding",
+   "progress": {
+    "call": 1,
+    "gen_tokens": 25,
+    "phase": "read README.md",
+    "prompt_tokens": 324,
+    "role": "read",
+    "type": "call"
+   }
+  },
+  {
+   "ts": 0.081,
+   "type": "host_progress",
+   "id": 4,
+   "workload": "coding",
+   "progress": {
+    "call": 2,
+    "gen_tokens": 25,
+    "phase": "read paper.md",
+    "prompt_tokens": 530,
+    "role": "read",
+    "type": "call"
+   }
+  },
+  {
+   "ts": 0.083,
+   "type": "host_progress",
+   "id": 4,
+   "workload": "coding",
+   "progress": {
+    "call": 3,
+    "gen_tokens": 25,
+    "phase": "read reference.py",
+    "prompt_tokens": 289,
+    "role": "read",
+    "type": "call"
+   }
+  },
+  {
+   "ts": 0.084,
+   "type": "host_progress",
+   "id": 4,
+   "workload": "coding",
+   "progress": {
+    "call": 4,
+    "gen_tokens": 25,
+    "phase": "read rng.py",
+    "prompt_tokens": 273,
+    "role": "read",
+    "type": "call"
+   }
+  },
+  {
+   "ts": 0.085,
+   "type": "host_progress",
+   "id": 4,
+   "workload": "coding",
+   "progress": {
+    "call": 5,
+    "gen_tokens": 25,
+    "phase": "plan: correctness",
+    "prompt_tokens": 254,
+    "role": "plan",
+    "type": "call"
+   }
+  },
+  {
+   "ts": 0.087,
+   "type": "host_progress",
+   "id": 4,
+   "workload": "coding",
+   "progress": {
+    "call": 6,
+    "gen_tokens": 25,
+    "phase": "plan: simplicity",
+    "prompt_tokens": 254,
+    "role": "plan",
+    "type": "call"
+   }
+  },
+  {
+   "ts": 0.088,
+   "type": "host_progress",
+   "id": 4,
+   "workload": "coding",
+   "progress": {
+    "call": 7,
+    "gen_tokens": 25,
+    "phase": "plan: edge cases",
+    "prompt_tokens": 254,
+    "role": "plan",
+    "type": "call"
+   }
+  },
+  {
+   "ts": 0.089,
+   "type": "host_progress",
+   "id": 4,
+   "workload": "coding",
+   "progress": {
+    "call": 8,
+    "gen_tokens": 25,
+    "phase": "synthesize plan",
+    "prompt_tokens": 229,
+    "role": "plan",
+    "type": "call"
+   }
+  },
+  {
+   "ts": 0.09,
+   "type": "host_progress",
+   "id": 4,
+   "workload": "coding",
+   "progress": {
+    "call": 9,
+    "gen_tokens": 107,
+    "phase": "write freivalds.py",
+    "prompt_tokens": 500,
+    "role": "codegen",
+    "type": "call"
+   }
+  },
+  {
+   "ts": 0.092,
+   "type": "host_progress",
+   "id": 4,
+   "workload": "coding",
+   "progress": {
+    "call": 10,
+    "gen_tokens": 160,
+    "phase": "write test_freivalds.py",
+    "prompt_tokens": 381,
+    "role": "codegen",
+    "type": "call"
+   }
+  },
+  {
+   "ts": 0.151,
+   "type": "host_progress",
+   "id": 4,
+   "workload": "coding",
+   "progress": {
+    "passed": true,
+    "round": 0,
+    "type": "tests"
+   }
+  },
+  {
+   "ts": 0.153,
+   "type": "host_progress",
+   "id": 4,
+   "workload": "coding",
+   "progress": {
+    "call": 11,
+    "gen_tokens": 25,
+    "phase": "read test results",
+    "prompt_tokens": 149,
+    "role": "test",
+    "type": "call"
+   }
+  },
+  {
+   "ts": 0.168,
+   "type": "host_completed",
+   "id": 4,
+   "workload": "coding",
+   "capture_digest": "sha256:078ef9b004bcd763af0396095788b05c1845ab6ba6ff624d89da74cc5d0b0105",
+   "output_sha256": "sha256:078ef9b004bcd763af0396095788b05c1845ab6ba6ff624d89da74cc5d0b0105",
+   "summary": {
+    "calls": 12,
+    "forward_passes": 517,
+    "tests_passed": true,
+    "fix_rounds": 0
+   }
+  },
+  {
+   "ts": 0.168,
+   "type": "tap_relayed_response",
+   "id": 4,
+   "workload": "coding"
+  },
+  {
+   "ts": 0.168,
+   "type": "client_received",
+   "id": 4,
+   "workload": "coding",
+   "summary": {
+    "calls": 12,
+    "forward_passes": 517,
+    "tests_passed": true,
+    "fix_rounds": 0
+   }
+  },
+  {
+   "ts": 0.168,
+   "type": "tap_verify_started",
+   "id": 4,
+   "workload": "coding"
+  },
+  {
+   "ts": 0.228,
+   "type": "recomp_progress",
+   "id": 4,
+   "workload": "coding",
+   "progress": {
+    "call": 0,
+    "gen_tokens": 25,
+    "phase": "read prompt, orient",
+    "prompt_tokens": 134,
+    "role": "reason",
+    "type": "call"
+   }
+  },
+  {
+   "ts": 0.23,
+   "type": "recomp_progress",
+   "id": 4,
+   "workload": "coding",
+   "progress": {
+    "call": 1,
+    "gen_tokens": 25,
+    "phase": "read README.md",
+    "prompt_tokens": 324,
+    "role": "read",
+    "type": "call"
+   }
+  },
+  {
+   "ts": 0.232,
+   "type": "recomp_progress",
+   "id": 4,
+   "workload": "coding",
+   "progress": {
+    "call": 2,
+    "gen_tokens": 25,
+    "phase": "read paper.md",
+    "prompt_tokens": 530,
+    "role": "read",
+    "type": "call"
+   }
+  },
+  {
+   "ts": 0.233,
+   "type": "recomp_progress",
+   "id": 4,
+   "workload": "coding",
+   "progress": {
+    "call": 3,
+    "gen_tokens": 25,
+    "phase": "read reference.py",
+    "prompt_tokens": 289,
+    "role": "read",
+    "type": "call"
+   }
+  },
+  {
+   "ts": 0.235,
+   "type": "recomp_progress",
+   "id": 4,
+   "workload": "coding",
+   "progress": {
+    "call": 4,
+    "gen_tokens": 25,
+    "phase": "read rng.py",
+    "prompt_tokens": 273,
+    "role": "read",
+    "type": "call"
+   }
+  },
+  {
+   "ts": 0.237,
+   "type": "recomp_progress",
+   "id": 4,
+   "workload": "coding",
+   "progress": {
+    "call": 5,
+    "gen_tokens": 25,
+    "phase": "plan: correctness",
+    "prompt_tokens": 254,
+    "role": "plan",
+    "type": "call"
+   }
+  },
+  {
+   "ts": 0.239,
+   "type": "recomp_progress",
+   "id": 4,
+   "workload": "coding",
+   "progress": {
+    "call": 6,
+    "gen_tokens": 25,
+    "phase": "plan: simplicity",
+    "prompt_tokens": 254,
+    "role": "plan",
+    "type": "call"
+   }
+  },
+  {
+   "ts": 0.241,
+   "type": "recomp_progress",
+   "id": 4,
+   "workload": "coding",
+   "progress": {
+    "call": 7,
+    "gen_tokens": 25,
+    "phase": "plan: edge cases",
+    "prompt_tokens": 254,
+    "role": "plan",
+    "type": "call"
+   }
+  },
+  {
+   "ts": 0.243,
+   "type": "recomp_progress",
+   "id": 4,
+   "workload": "coding",
+   "progress": {
+    "call": 8,
+    "gen_tokens": 25,
+    "phase": "synthesize plan",
+    "prompt_tokens": 229,
+    "role": "plan",
+    "type": "call"
+   }
+  },
+  {
+   "ts": 0.245,
+   "type": "recomp_progress",
+   "id": 4,
+   "workload": "coding",
+   "progress": {
+    "call": 9,
+    "gen_tokens": 107,
+    "phase": "write freivalds.py",
+    "prompt_tokens": 500,
+    "role": "codegen",
+    "type": "call"
+   }
+  },
+  {
+   "ts": 0.247,
+   "type": "recomp_progress",
+   "id": 4,
+   "workload": "coding",
+   "progress": {
+    "call": 10,
+    "gen_tokens": 160,
+    "phase": "write test_freivalds.py",
+    "prompt_tokens": 381,
+    "role": "codegen",
+    "type": "call"
+   }
+  },
+  {
+   "ts": 0.312,
+   "type": "recomp_progress",
+   "id": 4,
+   "workload": "coding",
+   "progress": {
+    "passed": true,
+    "round": 0,
+    "type": "tests"
+   }
+  },
+  {
+   "ts": 0.314,
+   "type": "recomp_progress",
+   "id": 4,
+   "workload": "coding",
+   "progress": {
+    "call": 11,
+    "gen_tokens": 25,
+    "phase": "read test results",
+    "prompt_tokens": 149,
+    "role": "test",
+    "type": "call"
+   }
+  },
+  {
+   "ts": 0.322,
+   "type": "recomp_verified",
+   "id": 4,
+   "workload": "coding",
+   "is_verified": true,
+   "expected_sha256": "sha256:078ef9b004bcd763af0396095788b05c1845ab6ba6ff624d89da74cc5d0b0105",
+   "actual_sha256": "sha256:078ef9b004bcd763af0396095788b05c1845ab6ba6ff624d89da74cc5d0b0105",
+   "reason": null
+  }
+ ]
+}

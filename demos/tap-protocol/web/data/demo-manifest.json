@@ -1,0 +1,89 @@
+{
+ "source": "mock",
+ "recorded_at": "2026-06-11T05:21:08+00:00",
+ "scenarios": {
+  "inference": {
+   "label": "Inference",
+   "params": {
+    "prompt": "The capital of France is",
+    "max_tokens": 12
+   },
+   "forward_passes": 12,
+   "total_flops": 61064413184,
+   "models": [
+    "Qwen/Qwen3-1.7B"
+   ],
+   "capture_digest": "sha256:9830bae75b36ed954d1580de62f52ee87e493cc029d14fb5ece70668132b5b9e",
+   "is_verified": true,
+   "summary": {
+    "forward_passes": 12,
+    "output_preview": "<2302><2109><2201><2751><2815><2004><2709><2779><2545><2685><2731><2175>"
+   },
+   "events_file": "inference.events.json",
+   "duration_s": 0.234
+  },
+  "spec": {
+   "label": "Speculative decoding",
+   "params": {
+    "prompt": "The key idea behind bitwise-deterministic inference is",
+    "max_tokens": 48,
+    "k": 4
+   },
+   "forward_passes": 65,
+   "total_flops": 286471127040,
+   "models": [
+    "hf://Qwen/Qwen3-0.6B",
+    "hf://Qwen/Qwen3-1.7B"
+   ],
+   "capture_digest": "sha256:a41402156f345c82e3202dad97c7d8aaa27a3e434bedf98e737f7618deba6278",
+   "is_verified": true,
+   "summary": {
+    "rounds": 13,
+    "drafts_accepted": 37,
+    "tokens": 48,
+    "output_preview": "the quick brown fox jumps over a lazy dog while two birds sing the quick brown fox jumps over a lazy dog while two birds sing the quick brow"
+   },
+   "events_file": "spec.events.json",
+   "duration_s": 0.16
+  },
+  "training": {
+   "label": "LoRA training",
+   "params": {},
+   "forward_passes": 76,
+   "total_flops": 21463820402688,
+   "models": [
+    "Qwen/Qwen3-1.7B"
+   ],
+   "capture_digest": "sha256:103d5d56a9734d14e30c987d8dfd47589e5ede51b880711f6ca29c13021167f0",
+   "is_verified": true,
+   "summary": {
+    "steps": 12,
+    "first_loss": 3.1,
+    "final_loss": 0.58,
+    "evals": 4,
+    "last_eval": " (mock eval text)"
+   },
+   "events_file": "training.events.json",
+   "duration_s": 0.134
+  },
+  "coding": {
+   "label": "Coding agent",
+   "params": {},
+   "forward_passes": 517,
+   "total_flops": 11996941647872,
+   "models": [
+    "Qwen/Qwen3-8B"
+   ],
+   "capture_digest": "sha256:078ef9b004bcd763af0396095788b05c1845ab6ba6ff624d89da74cc5d0b0105",
+   "is_verified": true,
+   "summary": {
+    "calls": 12,
+    "forward_passes": 517,
+    "tests_passed": true,
+    "fix_rounds": 0
+   },
+   "events_file": "coding.events.json",
+   "duration_s": 0.322
+  }
+ }
+}

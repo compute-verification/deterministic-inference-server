@@ -1,0 +1,448 @@
+{
+ "workload": "spec",
+ "source": "mock",
+ "events": [
+  {
+   "ts": 0.0,
+   "type": "request_sent",
+   "id": 2,
+   "workload": "spec",
+   "params": {
+    "prompt": "The key idea behind bitwise-deterministic inference is",
+    "max_tokens": 48,
+    "k": 4
+   }
+  },
+  {
+   "ts": 0.0,
+   "type": "gateway_signed",
+   "id": 2,
+   "workload": "spec",
+   "signature_prefix": "7067913fb420"
+  },
+  {
+   "ts": 0.0,
+   "type": "tap_received",
+   "id": 2,
+   "workload": "spec"
+  },
+  {
+   "ts": 0.0,
+   "type": "tap_relayed_request",
+   "id": 2,
+   "workload": "spec"
+  },
+  {
+   "ts": 0.058,
+   "type": "host_progress",
+   "id": 2,
+   "workload": "spec",
+   "progress": {
+    "accepted": 1,
+    "committed": 2,
+    "k": 4,
+    "max_tokens": 48,
+    "round": 1,
+    "type": "round"
+   }
+  },
+  {
+   "ts": 0.059,
+   "type": "host_progress",
+   "id": 2,
+   "workload": "spec",
+   "progress": {
+    "accepted": 3,
+    "committed": 6,
+    "k": 4,
+    "max_tokens": 48,
+    "round": 2,
+    "type": "round"
+   }
+  },
+  {
+   "ts": 0.061,
+   "type": "host_progress",
+   "id": 2,
+   "workload": "spec",
+   "progress": {
+    "accepted": 3,
+    "committed": 10,
+    "k": 4,
+    "max_tokens": 48,
+    "round": 3,
+    "type": "round"
+   }
+  },
+  {
+   "ts": 0.062,
+   "type": "host_progress",
+   "id": 2,
+   "workload": "spec",
+   "progress": {
+    "accepted": 3,
+    "committed": 14,
+    "k": 4,
+    "max_tokens": 48,
+    "round": 4,
+    "type": "round"
+   }
+  },
+  {
+   "ts": 0.063,
+   "type": "host_progress",
+   "id": 2,
+   "workload": "spec",
+   "progress": {
+    "accepted": 3,
+    "committed": 18,
+    "k": 4,
+    "max_tokens": 48,
+    "round": 5,
+    "type": "round"
+   }
+  },
+  {
+   "ts": 0.064,
+   "type": "host_progress",
+   "id": 2,
+   "workload": "spec",
+   "progress": {
+    "accepted": 3,
+    "committed": 22,
+    "k": 4,
+    "max_tokens": 48,
+    "round": 6,
+    "type": "round"
+   }
+  },
+  {
+   "ts": 0.065,
+   "type": "host_progress",
+   "id": 2,
+   "workload": "spec",
+   "progress": {
+    "accepted": 3,
+    "committed": 26,
+    "k": 4,
+    "max_tokens": 48,
+    "round": 7,
+    "type": "round"
+   }
+  },
+  {
+   "ts": 0.066,
+   "type": "host_progress",
+   "id": 2,
+   "workload": "spec",
+   "progress": {
+    "accepted": 3,
+    "committed": 30,
+    "k": 4,
+    "max_tokens": 48,
+    "round": 8,
+    "type": "round"
+   }
+  },
+  {
+   "ts": 0.068,
+   "type": "host_progress",
+   "id": 2,
+   "workload": "spec",
+   "progress": {
+    "accepted": 3,
+    "committed": 34,
+    "k": 4,
+    "max_tokens": 48,
+    "round": 9,
+    "type": "round"
+   }
+  },
+  {
+   "ts": 0.069,
+   "type": "host_progress",
+   "id": 2,
+   "workload": "spec",
+   "progress": {
+    "accepted": 3,
+    "committed": 38,
+    "k": 4,
+    "max_tokens": 48,
+    "round": 10,
+    "type": "round"
+   }
+  },
+  {
+   "ts": 0.07,
+   "type": "host_progress",
+   "id": 2,
+   "workload": "spec",
+   "progress": {
+    "accepted": 3,
+    "committed": 42,
+    "k": 4,
+    "max_tokens": 48,
+    "round": 11,
+    "type": "round"
+   }
+  },
+  {
+   "ts": 0.071,
+   "type": "host_progress",
+   "id": 2,
+   "workload": "spec",
+   "progress": {
+    "accepted": 3,
+    "committed": 46,
+    "k": 4,
+    "max_tokens": 48,
+    "round": 12,
+    "type": "round"
+   }
+  },
+  {
+   "ts": 0.072,
+   "type": "host_progress",
+   "id": 2,
+   "workload": "spec",
+   "progress": {
+    "accepted": 3,
+    "committed": 48,
+    "k": 4,
+    "max_tokens": 48,
+    "round": 13,
+    "type": "round"
+   }
+  },
+  {
+   "ts": 0.075,
+   "type": "host_completed",
+   "id": 2,
+   "workload": "spec",
+   "capture_digest": "sha256:a41402156f345c82e3202dad97c7d8aaa27a3e434bedf98e737f7618deba6278",
+   "output_sha256": "sha256:a41402156f345c82e3202dad97c7d8aaa27a3e434bedf98e737f7618deba6278",
+   "summary": {
+    "rounds": 13,
+    "drafts_accepted": 37,
+    "tokens": 48,
+    "output_preview": "the quick brown fox jumps over a lazy dog while two birds sing the quick brown fox jumps over a lazy dog while two birds sing the quick brow"
+   }
+  },
+  {
+   "ts": 0.075,
+   "type": "tap_relayed_response",
+   "id": 2,
+   "workload": "spec"
+  },
+  {
+   "ts": 0.075,
+   "type": "client_received",
+   "id": 2,
+   "workload": "spec",
+   "summary": {
+    "rounds": 13,
+    "drafts_accepted": 37,
+    "tokens": 48,
+    "output_preview": "the quick brown fox jumps over a lazy dog while two birds sing the quick brown fox jumps over a lazy dog while two birds sing the quick brow"
+   }
+  },
+  {
+   "ts": 0.075,
+   "type": "tap_verify_started",
+   "id": 2,
+   "workload": "spec"
+  },
+  {
+   "ts": 0.148,
+   "type": "recomp_progress",
+   "id": 2,
+   "workload": "spec",
+   "progress": {
+    "accepted": 1,
+    "committed": 2,
+    "k": 4,
+    "max_tokens": 48,
+    "round": 1,
+    "type": "round"
+   }
+  },
+  {
+   "ts": 0.149,
+   "type": "recomp_progress",
+   "id": 2,
+   "workload": "spec",
+   "progress": {
+    "accepted": 3,
+    "committed": 6,
+    "k": 4,
+    "max_tokens": 48,
+    "round": 2,
+    "type": "round"
+   }
+  },
+  {
+   "ts": 0.15,
+   "type": "recomp_progress",
+   "id": 2,
+   "workload": "spec",
+   "progress": {
+    "accepted": 3,
+    "committed": 10,
+    "k": 4,
+    "max_tokens": 48,
+    "round": 3,
+    "type": "round"
+   }
+  },
+  {
+   "ts": 0.151,
+   "type": "recomp_progress",
+   "id": 2,
+   "workload": "spec",
+   "progress": {
+    "accepted": 3,
+    "committed": 14,
+    "k": 4,
+    "max_tokens": 48,
+    "round": 4,
+    "type": "round"
+   }
+  },
+  {
+   "ts": 0.152,
+   "type": "recomp_progress",
+   "id": 2,
+   "workload": "spec",
+   "progress": {
+    "accepted": 3,
+    "committed": 18,
+    "k": 4,
+    "max_tokens": 48,
+    "round": 5,
+    "type": "round"
+   }
+  },
+  {
+   "ts": 0.153,
+   "type": "recomp_progress",
+   "id": 2,
+   "workload": "spec",
+   "progress": {
+    "accepted": 3,
+    "committed": 22,
+    "k": 4,
+    "max_tokens": 48,
+    "round": 6,
+    "type": "round"
+   }
+  },
+  {
+   "ts": 0.154,
+   "type": "recomp_progress",
+   "id": 2,
+   "workload": "spec",
+   "progress": {
+    "accepted": 3,
+    "committed": 26,
+    "k": 4,
+    "max_tokens": 48,
+    "round": 7,
+    "type": "round"
+   }
+  },
+  {
+   "ts": 0.155,
+   "type": "recomp_progress",
+   "id": 2,
+   "workload": "spec",
+   "progress": {
+    "accepted": 3,
+    "committed": 30,
+    "k": 4,
+    "max_tokens": 48,
+    "round": 8,
+    "type": "round"
+   }
+  },
+  {
+   "ts": 0.156,
+   "type": "recomp_progress",
+   "id": 2,
+   "workload": "spec",
+   "progress": {
+    "accepted": 3,
+    "committed": 34,
+    "k": 4,
+    "max_tokens": 48,
+    "round": 9,
+    "type": "round"
+   }
+  },
+  {
+   "ts": 0.156,
+   "type": "recomp_progress",
+   "id": 2,
+   "workload": "spec",
+   "progress": {
+    "accepted": 3,
+    "committed": 38,
+    "k": 4,
+    "max_tokens": 48,
+    "round": 10,
+    "type": "round"
+   }
+  },
+  {
+   "ts": 0.157,
+   "type": "recomp_progress",
+   "id": 2,
+   "workload": "spec",
+   "progress": {
+    "accepted": 3,
+    "committed": 42,
+    "k": 4,
+    "max_tokens": 48,
+    "round": 11,
+    "type": "round"
+   }
+  },
+  {
+   "ts": 0.158,
+   "type": "recomp_progress",
+   "id": 2,
+   "workload": "spec",
+   "progress": {
+    "accepted": 3,
+    "committed": 46,
+    "k": 4,
+    "max_tokens": 48,
+    "round": 12,
+    "type": "round"
+   }
+  },
+  {
+   "ts": 0.159,
+   "type": "recomp_progress",
+   "id": 2,
+   "workload": "spec",
+   "progress": {
+    "accepted": 3,
+    "committed": 48,
+    "k": 4,
+    "max_tokens": 48,
+    "round": 13,
+    "type": "round"
+   }
+  },
+  {
+   "ts": 0.16,
+   "type": "recomp_verified",
+   "id": 2,
+   "workload": "spec",
+   "is_verified": true,
+   "expected_sha256": "sha256:a41402156f345c82e3202dad97c7d8aaa27a3e434bedf98e737f7618deba6278",
+   "actual_sha256": "sha256:a41402156f345c82e3202dad97c7d8aaa27a3e434bedf98e737f7618deba6278",
+   "reason": null
+  }
+ ]
+}
