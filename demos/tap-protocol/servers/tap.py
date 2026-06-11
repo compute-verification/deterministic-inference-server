@@ -209,6 +209,53 @@ def _async_compare(
         sys.stderr.write(f"[tap] compare failed: {exc}\n")
 
 
+def _async_verify_run(recomp_url: str, request_env: dict, response_env: dict,
+                      env_id: int, workload: str) -> None:
+    """Fire-and-forget POST to recomp /verify_run (a full workload re-run).
+
+    The recomp re-executes the whole scenario and bitwise-compares canonical
+    capture digests; its per-step progress arrives separately via POST /event.
+    """
+    BUS.emit("tap_verify_started", env_id, workload=workload)
+    try:
+        body = json.dumps({
+            "request_data": request_env,
+            "response_data": response_env,
+        }).encode("utf-8")
+        req = Request(
+            f"{recomp_url}/verify_run",
+            data=body,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        # a coding-agent re-run takes tens of minutes on the GPU
+        with urlopen(req, timeout=7200) as resp:
+            verdict = json.loads(resp.read())
+        sys.stderr.write(f"[tap] verify_run verdict for id={env_id}: "
+                         f"{ {k: v for k, v in verdict.items() if k != 'capture'} }\n")
+        BUS.emit(
+            "recomp_verified",
+            env_id,
+            workload=workload,
+            is_verified=bool(verdict.get("is_verified", False)),
+            expected_sha256=verdict.get("expected_digest", ""),
+            actual_sha256=verdict.get("actual_digest", ""),
+            reason=verdict.get("reason"),
+        )
+    except HTTPError as exc:
+        sys.stderr.write(f"[tap] verify_run HTTP {exc.code}: {exc.reason}\n")
+        BUS.emit("recomp_verified", env_id, workload=workload,
+                 is_verified=False, reason=f"http_{exc.code}")
+    except URLError as exc:
+        sys.stderr.write(f"[tap] verify_run unreachable: {exc.reason}\n")
+        BUS.emit("recomp_verified", env_id, workload=workload,
+                 is_verified=False, reason="unreachable")
+    except Exception as exc:  # noqa: BLE001
+        sys.stderr.write(f"[tap] verify_run failed: {exc}\n")
+        BUS.emit("recomp_verified", env_id, workload=workload,
+                 is_verified=False, reason=str(exc))
+
+
 def _async_proof_copy(proof_server_url: str, request_env: dict, response_env: dict) -> None:
     """Fire-and-forget POST of the verified (req, resp) pair to the proof server.
 
@@ -322,6 +369,10 @@ class TapHandler(BaseHTTPRequestHandler):
         self.wfile.flush()
 
     def do_POST(self) -> None:
+        if self.path == "/event":
+            return self._handle_event_ingest()
+        if self.path == "/run":
+            return self._handle_run()
         if self.path != "/request":
             return self._send_json(404, {"error": "not found"})
         try:
@@ -409,6 +460,105 @@ class TapHandler(BaseHTTPRequestHandler):
                 args=(self.proof_server_url, req_env.model_dump(), resp_env.model_dump()),
                 daemon=True,
             ).start()
+
+    def _handle_event_ingest(self) -> None:
+        """POST /event: the clusters stream workload progress through here.
+
+        Only the two progress types are accepted -- the protocol lifecycle
+        events are synthesized by the Tap itself and must not be spoofable
+        via this ingest.
+        """
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            body = json.loads(self.rfile.read(length))
+            type_ = body.pop("type")
+            env_id = int(body.pop("id"))
+        except Exception as exc:  # noqa: BLE001
+            return self._send_json(400, {"error": f"bad event: {exc}"})
+        if type_ not in ("host_progress", "recomp_progress"):
+            return self._send_json(400, {"error": f"event type {type_!r} not ingestable"})
+        body.pop("seq", None)
+        body.pop("ts", None)
+        BUS.emit(type_, env_id, **body)
+        return self._send_json(200, {"ok": True})
+
+    def _handle_run(self) -> None:
+        """POST /run: relay a signed WorkloadRequest to the Host, then tap a
+        copy to the Recomp for a full re-run. Same lifecycle events as
+        /request (the viewer animation binds to them unchanged), plus a
+        ``workload`` field on each."""
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            body = json.loads(self.rfile.read(length))
+            req_env = SignedEnvelope.model_validate(body)
+        except Exception as exc:  # noqa: BLE001
+            return self._send_json(400, {"error": f"bad envelope: {exc}"})
+
+        if not verify(req_env):
+            return self._send_json(401, {"error": "bad request signature"})
+
+        env_id = req_env.data.id
+        req_env_dict = req_env.model_dump()
+        payload = req_env_dict["data"]["payload"]
+        workload = payload.get("workload", "?")
+        BUS.emit("request_sent", env_id, workload=workload,
+                 params=payload.get("params", {}))
+        BUS.emit("gateway_signed", env_id, workload=workload,
+                 signature_prefix=_signature_prefix(req_env_dict))
+        BUS.emit("tap_received", env_id, workload=workload)
+        BUS.emit("tap_relayed_request", env_id, workload=workload)
+
+        try:
+            outbound = Request(
+                f"{self.host_url}/run",
+                data=json.dumps(req_env_dict).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            # a coding-agent run takes tens of minutes on the GPU
+            with urlopen(outbound, timeout=7200) as resp:
+                resp_body = json.loads(resp.read())
+        except HTTPError as exc:
+            try:
+                err_body = exc.read().decode("utf-8", errors="replace")
+            except Exception:
+                err_body = ""
+            return self._send_json(502, {"error": f"host returned HTTP {exc.code}", "body": err_body})
+        except URLError as exc:
+            return self._send_json(502, {"error": f"host unreachable: {exc.reason}"})
+        except Exception as exc:  # noqa: BLE001
+            return self._send_json(502, {"error": f"host call failed: {exc}"})
+
+        try:
+            resp_env = SignedEnvelope.model_validate(resp_body)
+        except Exception as exc:  # noqa: BLE001
+            return self._send_json(502, {"error": f"bad response envelope: {exc}"})
+
+        if not verify(resp_env):
+            return self._send_json(401, {"error": "bad response signature"})
+
+        resp_env_dict = resp_env.model_dump()
+        result = resp_env_dict["data"]["payload"]
+        BUS.emit(
+            "host_completed",
+            env_id,
+            workload=workload,
+            capture_digest=result.get("capture_digest", ""),
+            # the existing viewer's digest row binds to output_sha256
+            output_sha256=result.get("capture_digest", ""),
+            summary=result.get("summary", {}),
+        )
+        BUS.emit("tap_relayed_response", env_id, workload=workload)
+
+        self._send_json(200, resp_env_dict)
+        BUS.emit("client_received", env_id, workload=workload,
+                 summary=result.get("summary", {}))
+
+        threading.Thread(
+            target=_async_verify_run,
+            args=(self.recomp_url, req_env_dict, resp_env_dict, env_id, workload),
+            daemon=True,
+        ).start()
 
     def log_message(self, format, *args):  # noqa: A002
         sys.stderr.write("[tap] " + (format % args) + "\n")

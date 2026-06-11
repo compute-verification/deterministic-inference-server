@@ -410,7 +410,8 @@ def main() -> int:
         capture["kind"] = "coding_agent_capture_mock"
 
     Path(args.out).write_text(json.dumps(capture))
-    n_fp = sum(1 + c["gen_tokens"] for c in capture["calls"])
+    # g recorded tokens = g real passes (emit semantics; see tracers/coding.py)
+    n_fp = sum(max(c["gen_tokens"], 1) for c in capture["calls"])
     print(f"calls={len(capture['calls'])} forward_passes={n_fp} -> {args.out}")
     return 0
 

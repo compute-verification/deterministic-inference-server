@@ -40,8 +40,11 @@ from servers.envelope import (
     InferenceRequest,
     InferenceResponse,
     SignedEnvelope,
+    WorkloadRequest,
+    WorkloadResult,
     verify,
 )
+from servers import workloads as W
 
 
 DEFAULT_MODEL_ID = "Qwen/Qwen3-1.7B"
@@ -62,6 +65,10 @@ class ClusterState:
         self.vllm_proc: subprocess.Popen | None = None
         self.alarm_lock = threading.Lock()
         self.lock = threading.Lock()
+        self.tap_url: str = ""        # where to POST progress events
+        self.no_vllm: bool = False
+        self.force_run_divergence: bool = False
+        self.run_lock = threading.Lock()  # one workload re-run at a time
 
 
 STATE = ClusterState()
@@ -138,6 +145,11 @@ def _boot_thread(args: argparse.Namespace) -> None:
         STATE.is_warm = True
         sys.stderr.write("[recomp_cluster] mock mode; warm immediately\n")
         return
+    if args.no_vllm:
+        # /verify_run re-runs load their own models; skip the vLLM child
+        STATE.is_warm = True
+        sys.stderr.write("[recomp_cluster] --no-vllm; /verify_run-only, warm immediately\n")
+        return
 
     proc = _start_vllm_child(args.manifest, args.proxy_port, args.vllm_port, args.out_dir)
     STATE.vllm_proc = proc
@@ -204,6 +216,74 @@ def _log_alarm(record: dict) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Workload re-runs (/verify_run)
+# ---------------------------------------------------------------------------
+
+def _post_event(payload: dict) -> None:
+    """Fire-and-forget progress event to the Tap's /event ingest."""
+    if not STATE.tap_url:
+        return
+    try:
+        req = Request(f"{STATE.tap_url}/event",
+                      data=json.dumps(payload).encode("utf-8"),
+                      headers={"Content-Type": "application/json"},
+                      method="POST")
+        with urlopen(req, timeout=10) as resp:
+            resp.read()
+    except Exception as exc:  # noqa: BLE001 -- progress is best-effort
+        sys.stderr.write(f"[recomp_cluster] event post failed: {exc}\n")
+
+
+def _verify_run(env_id: int, inner_req: WorkloadRequest,
+                claimed: WorkloadResult) -> dict:
+    """Independently re-run the whole workload and compare canonical digests."""
+    # Integrity of the claim itself: the digest the host signed must match the
+    # capture it shipped. A mismatch means the response is internally bogus.
+    host_digest = W.canonical_digest(claimed.capture)
+    if host_digest != claimed.capture_digest:
+        _log_alarm({"id": env_id, "workload": inner_req.workload,
+                    "reason": "digest_claim_mismatch",
+                    "claimed_digest": claimed.capture_digest,
+                    "computed_digest": host_digest,
+                    "verified_at": utc_now_iso()})
+        return {"is_verified": False, "reason": "digest_claim_mismatch",
+                "expected_digest": claimed.capture_digest,
+                "actual_digest": host_digest}
+
+    def on_progress(prog: dict) -> None:
+        # nested: harness progress carries its own "type" key
+        _post_event({"type": "recomp_progress", "id": env_id,
+                     "workload": inner_req.workload, "progress": prog})
+
+    with STATE.run_lock:
+        capture, digest = W.run_workload(
+            inner_req.workload, inner_req.params, mock=STATE.mock,
+            on_progress=on_progress)
+    if STATE.force_run_divergence:
+        capture = dict(capture, _forced_divergence=True)
+        digest = W.canonical_digest(capture)
+
+    if digest == claimed.capture_digest:
+        return {"is_verified": True, "expected_digest": claimed.capture_digest,
+                "actual_digest": digest}
+
+    # forensics: keep both captures next to the alarm line
+    runs = STATE.out_dir / "mismatches"
+    runs.mkdir(parents=True, exist_ok=True)
+    (runs / f"{env_id:04d}-{inner_req.workload}.host.json").write_text(
+        json.dumps(claimed.capture))
+    (runs / f"{env_id:04d}-{inner_req.workload}.recomp.json").write_text(
+        json.dumps(capture))
+    _log_alarm({"id": env_id, "workload": inner_req.workload,
+                "reason": "capture_digest_mismatch",
+                "expected_digest": claimed.capture_digest,
+                "actual_digest": digest,
+                "verified_at": utc_now_iso()})
+    return {"is_verified": False, "reason": "capture_digest_mismatch",
+            "expected_digest": claimed.capture_digest, "actual_digest": digest}
+
+
+# ---------------------------------------------------------------------------
 # HTTP
 # ---------------------------------------------------------------------------
 
@@ -225,7 +305,7 @@ class RecompHandler(BaseHTTPRequestHandler):
         return self._send_json(404, {"error": "not found"})
 
     def do_POST(self) -> None:
-        if self.path != "/verify":
+        if self.path not in ("/verify", "/verify_run"):
             return self._send_json(404, {"error": "not found"})
         if not STATE.is_warm:
             return self._send_json(503, {"error": "not warm"})
@@ -254,6 +334,9 @@ class RecompHandler(BaseHTTPRequestHandler):
                 "verified_at": utc_now_iso(),
             })
             return self._send_json(200, {"is_verified": False, "reason": "id_mismatch"})
+
+        if self.path == "/verify_run":
+            return self._handle_verify_run(req_env, resp_env)
 
         try:
             inner_req = InferenceRequest.model_validate(req_env.data.payload)
@@ -288,6 +371,27 @@ class RecompHandler(BaseHTTPRequestHandler):
             "verified_at": utc_now_iso(),
         })
         return self._send_json(200, {"is_verified": False, "reason": "output_mismatch", "recomp_output": actual})
+
+    def _handle_verify_run(self, req_env: SignedEnvelope, resp_env: SignedEnvelope) -> None:
+        try:
+            inner_req = WorkloadRequest.model_validate(req_env.data.payload)
+            claimed = WorkloadResult.model_validate(resp_env.data.payload)
+        except Exception as exc:  # noqa: BLE001
+            return self._send_json(400, {"error": f"bad inner payload: {exc}"})
+        if inner_req.workload != claimed.workload:
+            _log_alarm({"id": req_env.data.id, "reason": "workload_mismatch",
+                        "request_workload": inner_req.workload,
+                        "result_workload": claimed.workload,
+                        "verified_at": utc_now_iso()})
+            return self._send_json(200, {"is_verified": False,
+                                         "reason": "workload_mismatch"})
+        try:
+            verdict = _verify_run(req_env.data.id, inner_req, claimed)
+        except W.WorkloadError as exc:
+            return self._send_json(500, {"error": f"recomp re-run failed: {exc}"})
+        except Exception as exc:  # noqa: BLE001
+            return self._send_json(500, {"error": f"recomp re-run failed: {exc}"})
+        return self._send_json(200, verdict)
 
     def log_message(self, format, *args):  # noqa: A002
         sys.stderr.write("[recomp_cluster] " + (format % args) + "\n")
@@ -325,11 +429,21 @@ def main() -> int:
     parser.add_argument("--mock", action="store_true")
     parser.add_argument("--mock-output-override", default=None,
                         help="If set in mock mode, return this string from recomp inference, forcing a mismatch")
+    parser.add_argument("--no-vllm", action="store_true",
+                        help="Serve /verify_run re-runs only; skip the vLLM child")
+    parser.add_argument("--tap-url", default="http://127.0.0.1:8010",
+                        help="Tap base URL for POSTing recomp_progress events")
+    parser.add_argument("--force-run-divergence", action="store_true",
+                        help="Perturb the re-run capture before digesting -- "
+                             "forces the /verify_run alarm path for testing")
     args = parser.parse_args()
 
     STATE.proxy_port = args.proxy_port
     STATE.mock = args.mock
     STATE.mock_output_override = args.mock_output_override
+    STATE.no_vllm = args.no_vllm
+    STATE.tap_url = args.tap_url.rstrip("/")
+    STATE.force_run_divergence = args.force_run_divergence
     STATE.out_dir = Path(args.out_dir)
     STATE.out_dir.mkdir(parents=True, exist_ok=True)
 

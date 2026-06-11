@@ -39,10 +39,50 @@ from servers.envelope import (
     InferenceRequest,
     InferenceResponse,
     SignedEnvelope,
+    WorkloadRequest,
+    WorkloadResult,
     next_id,
     sign,
     verify,
 )
+from servers import workloads as W
+
+
+# ---------------------------------------------------------------------------
+# Async workload jobs
+#
+# POST /run returns immediately with the envelope id; a worker thread relays
+# the signed request through the Tap (a coding-agent run takes tens of
+# minutes -- a synchronous HTTP response would die in every proxy on the
+# way). Clients follow progress on /events and poll GET /run/<id>.
+# ---------------------------------------------------------------------------
+
+JOBS: dict[int, dict] = {}
+JOBS_LOCK = threading.Lock()
+
+
+def _run_job(env_id: int, signed_req: SignedEnvelope, tap_url: str) -> None:
+    try:
+        data = json.dumps(signed_req.model_dump()).encode("utf-8")
+        outbound = Request(f"{tap_url}/run", data=data,
+                           headers={"Content-Type": "application/json"},
+                           method="POST")
+        with urlopen(outbound, timeout=7200) as resp:
+            resp_body = json.loads(resp.read())
+        signed_resp = SignedEnvelope.model_validate(resp_body)
+        if not verify(signed_resp):
+            raise ValueError("response envelope signature invalid")
+        result = WorkloadResult.model_validate(signed_resp.data.payload)
+    except Exception as exc:  # noqa: BLE001
+        with JOBS_LOCK:
+            JOBS[env_id].update(status="failed", error=str(exc))
+        sys.stderr.write(f"[gateway] run {env_id} failed: {exc}\n")
+        return
+    with JOBS_LOCK:
+        JOBS[env_id].update(status="done",
+                            capture_digest=result.capture_digest,
+                            summary=result.summary,
+                            capture=result.capture)
 
 
 # ---------------------------------------------------------------------------
@@ -68,6 +108,40 @@ class GatewayHandler(BaseHTTPRequestHandler):
             return self._proxy_sse(f"{self.tap_url}/events")
         if self.path.startswith("/capture"):
             return self._proxy_capture()
+        if self.path.startswith("/run/"):
+            return self._handle_run_get()
+        return self._send_json(404, {"error": "not found"})
+
+    def _handle_run_get(self) -> None:
+        """GET /run/<id> | /run/<id>/capture | /run/<id>/graph"""
+        parts = self.path.strip("/").split("/")
+        try:
+            env_id = int(parts[1])
+        except (IndexError, ValueError):
+            return self._send_json(400, {"error": "bad run id"})
+        sub = parts[2] if len(parts) > 2 else ""
+        with JOBS_LOCK:
+            job = JOBS.get(env_id)
+            job = dict(job) if job else None
+        if job is None:
+            return self._send_json(404, {"error": f"unknown run id {env_id}"})
+
+        if sub == "":
+            return self._send_json(200, {k: v for k, v in job.items()
+                                         if k != "capture"})
+        if job.get("status") != "done":
+            return self._send_json(409, {"error": f"run is {job.get('status')}"})
+        if sub == "capture":
+            return self._send_json(200, job["capture"])
+        if sub == "graph":
+            try:
+                from modules.proof_server.graph import build_graph
+                trace = W.capture_to_trace(job["workload"], job["capture"])
+                graph = build_graph(trace).to_dict()
+            except Exception as exc:  # noqa: BLE001
+                return self._send_json(500, {"error": f"graph build failed: {exc}"})
+            # same file shape as the viz's graphs.json: {scene_key: graph}
+            return self._send_json(200, {job["workload"]: graph})
         return self._send_json(404, {"error": "not found"})
 
     def do_OPTIONS(self) -> None:
@@ -136,6 +210,8 @@ class GatewayHandler(BaseHTTPRequestHandler):
                 pass
 
     def do_POST(self) -> None:
+        if self.path == "/run":
+            return self._handle_run_post()
         if self.path != "/request":
             return self._send_json(404, {"error": "not found"})
         try:
@@ -184,6 +260,30 @@ class GatewayHandler(BaseHTTPRequestHandler):
             return self._send_json(502, {"error": f"bad inner response: {exc}"})
 
         return self._send_json(200, inner.model_dump())
+
+    def _handle_run_post(self) -> None:
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            body = json.loads(self.rfile.read(length))
+            req = WorkloadRequest.model_validate(body)
+            if req.workload not in W.WORKLOADS:
+                raise ValueError(f"unknown workload {req.workload!r}; "
+                                 f"expected one of {sorted(W.WORKLOADS)}")
+            # surface bad params at submit time, not minutes later on the host
+            W.build_argv(req.workload, req.params, True, Path("/dev/null"))
+        except Exception as exc:  # noqa: BLE001
+            return self._send_json(400, {"error": f"bad run request: {exc}"})
+
+        env_id = next_id()
+        signed_req = sign(req.model_dump(), env_id)
+        with JOBS_LOCK:
+            JOBS[env_id] = {"id": env_id, "status": "running",
+                            "workload": req.workload, "params": req.params}
+        threading.Thread(target=_run_job,
+                         args=(env_id, signed_req, self.tap_url),
+                         daemon=True).start()
+        return self._send_json(202, {"id": env_id, "status": "running",
+                                     "workload": req.workload})
 
     def log_message(self, format, *args):  # noqa: A002
         sys.stderr.write("[gateway] " + (format % args) + "\n")

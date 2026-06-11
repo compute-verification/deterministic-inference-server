@@ -38,9 +38,12 @@ from servers.envelope import (
     InferenceRequest,
     InferenceResponse,
     SignedEnvelope,
+    WorkloadRequest,
+    WorkloadResult,
     sign,
     verify,
 )
+from servers import workloads as W
 
 
 # Fallback model id used when /v1/models cannot be queried (mock mode, etc.).
@@ -63,6 +66,10 @@ class ClusterState:
         self.model_id: str = DEFAULT_MODEL_ID
         self.vllm_proc: subprocess.Popen | None = None
         self.lock = threading.Lock()
+        self.tap_url: str = ""        # where to POST progress events
+        self.out_dir: Path | None = None
+        self.no_vllm: bool = False
+        self.run_lock = threading.Lock()  # one workload at a time owns the GPU
 
 
 STATE = ClusterState()
@@ -144,6 +151,12 @@ def _boot_thread(args: argparse.Namespace) -> None:
         STATE.is_warm = True
         sys.stderr.write("[host_cluster] mock mode; warm immediately\n")
         return
+    if args.no_vllm:
+        # /run workloads load their own models; skipping the vLLM child keeps
+        # the GPU free for them (the /request path 503s in this mode).
+        STATE.is_warm = True
+        sys.stderr.write("[host_cluster] --no-vllm; /run-only, warm immediately\n")
+        return
 
     proc = _start_vllm_child(args.manifest, args.proxy_port, args.vllm_port, args.out_dir)
     STATE.vllm_proc = proc
@@ -192,6 +205,48 @@ def _do_mock_inference(prompt: str, max_tokens: int) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Workload jobs (/run)
+# ---------------------------------------------------------------------------
+
+def _post_event(payload: dict) -> None:
+    """Fire-and-forget progress event to the Tap's /event ingest."""
+    if not STATE.tap_url:
+        return
+    try:
+        req = Request(f"{STATE.tap_url}/event",
+                      data=json.dumps(payload).encode("utf-8"),
+                      headers={"Content-Type": "application/json"},
+                      method="POST")
+        with urlopen(req, timeout=10) as resp:
+            resp.read()
+    except Exception as exc:  # noqa: BLE001 -- progress is best-effort
+        sys.stderr.write(f"[host_cluster] event post failed: {exc}\n")
+
+
+def _do_workload(env_id: int, inner: WorkloadRequest) -> WorkloadResult:
+    def on_progress(prog: dict) -> None:
+        # progress nests under its own key -- harness dicts carry a "type"
+        # of their own ("token"/"round"/"step"/"call") that must not clobber
+        # the event type
+        _post_event({"type": "host_progress", "id": env_id,
+                     "workload": inner.workload, "progress": prog})
+
+    with STATE.run_lock:   # serialize: one workload owns the GPU at a time
+        capture, digest = W.run_workload(
+            inner.workload, inner.params, mock=STATE.mock, on_progress=on_progress)
+
+    if STATE.out_dir:
+        runs = STATE.out_dir / "runs"
+        runs.mkdir(parents=True, exist_ok=True)
+        (runs / f"{env_id:04d}-{inner.workload}.json").write_text(
+            json.dumps(capture))
+
+    return WorkloadResult(workload=inner.workload, capture_digest=digest,
+                          summary=W.summarize(inner.workload, capture),
+                          capture=capture)
+
+
+# ---------------------------------------------------------------------------
 # HTTP
 # ---------------------------------------------------------------------------
 
@@ -213,7 +268,7 @@ class HostHandler(BaseHTTPRequestHandler):
         return self._send_json(404, {"error": "not found"})
 
     def do_POST(self) -> None:
-        if self.path != "/request":
+        if self.path not in ("/request", "/run"):
             return self._send_json(404, {"error": "not found"})
         if not STATE.is_warm:
             return self._send_json(503, {"error": "not warm"})
@@ -227,6 +282,12 @@ class HostHandler(BaseHTTPRequestHandler):
 
         if not verify(req_env):
             return self._send_json(401, {"error": "bad request signature"})
+
+        if self.path == "/run":
+            return self._handle_run(req_env)
+
+        if STATE.no_vllm:
+            return self._send_json(503, {"error": "started with --no-vllm; only /run is served"})
 
         try:
             inner = InferenceRequest.model_validate(req_env.data.payload)
@@ -247,6 +308,20 @@ class HostHandler(BaseHTTPRequestHandler):
 
         resp = InferenceResponse(output=output)
         signed_resp = sign(resp.model_dump(), req_env.data.id)
+        return self._send_json(200, signed_resp.model_dump())
+
+    def _handle_run(self, req_env: SignedEnvelope) -> None:
+        try:
+            inner = WorkloadRequest.model_validate(req_env.data.payload)
+        except Exception as exc:  # noqa: BLE001
+            return self._send_json(400, {"error": f"bad workload request: {exc}"})
+        try:
+            result = _do_workload(req_env.data.id, inner)
+        except W.WorkloadError as exc:
+            return self._send_json(400, {"error": str(exc)})
+        except Exception as exc:  # noqa: BLE001
+            return self._send_json(500, {"error": f"workload failed: {exc}"})
+        signed_resp = sign(result.model_dump(), req_env.data.id)
         return self._send_json(200, signed_resp.model_dump())
 
     def log_message(self, format, *args):  # noqa: A002
@@ -287,10 +362,18 @@ def main() -> int:
     parser.add_argument("--out-dir", default="/tmp/host-cluster")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--mock", action="store_true", help="Skip Popen; serve canned outputs")
+    parser.add_argument("--no-vllm", action="store_true",
+                        help="Serve /run workloads only; skip the vLLM child "
+                             "(keeps the GPU free for harness-loaded models)")
+    parser.add_argument("--tap-url", default="http://127.0.0.1:8010",
+                        help="Tap base URL for POSTing host_progress events")
     args = parser.parse_args()
 
     STATE.proxy_port = args.proxy_port
     STATE.mock = args.mock
+    STATE.no_vllm = args.no_vllm
+    STATE.tap_url = args.tap_url.rstrip("/")
+    STATE.out_dir = Path(args.out_dir)
 
     server = ThreadedHTTPServer((args.host, args.port), HostHandler)
     _install_shutdown(server)

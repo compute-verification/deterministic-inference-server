@@ -77,7 +77,7 @@ def spec_capture(prompt: str, max_tokens: int, k: int, mock: bool) -> dict:
         draft_cfg = AutoConfig.from_pretrained(DRAFT_ID).to_dict()
         target_cfg = AutoConfig.from_pretrained(TARGET_ID).to_dict()
 
-    return {
+    cap = {
         "kind": "spec_decode_capture",
         "draft_model": DRAFT_ID,
         "target_model": TARGET_ID,
@@ -93,6 +93,9 @@ def spec_capture(prompt: str, max_tokens: int, k: int, mock: bool) -> dict:
         "draft_steps": resp["draft_steps"],
         "target_passes": resp["target_passes"],
     }
+    if mock:
+        cap["mock"] = True   # a mock capture must never pass as a real run
+    return cap
 
 
 def main() -> int:

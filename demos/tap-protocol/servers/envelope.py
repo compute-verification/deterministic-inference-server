@@ -45,6 +45,25 @@ class InferenceResponse(BaseModel):
     output: str
 
 
+class WorkloadRequest(BaseModel):
+    """A /run job: execute one whole proof-compare scenario as the payload.
+
+    ``workload`` is a key of servers.workloads.WORKLOADS; ``params`` is
+    whitelisted per workload there (never interpolated into a shell).
+    """
+    workload: str
+    params: dict[str, Any] = Field(default_factory=dict)
+
+
+class WorkloadResult(BaseModel):
+    """The Host cluster's signed result: the full capture + its canonical
+    digest (what the Recomp cluster's independent re-run must reproduce)."""
+    workload: str
+    capture_digest: str
+    summary: dict[str, Any]
+    capture: dict[str, Any]
+
+
 class EnvelopeData(BaseModel):
     id: int
     payload: dict[str, Any]
