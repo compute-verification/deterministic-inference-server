@@ -62,20 +62,15 @@ export function ctx0(tokens, attended) {
 }
 
 // Human-readable input size for a node: what the pass ingests this step,
-// plus the prior context it attends over (when there is one). inputText is
-// the bare text (used on edge labels, where the arrow already says "into");
-// inputSummary prefixes "in:" for tooltips and root badges.
+// plus the prior context it attends over (when there is one). Bare text —
+// used on edge labels, where the arrow already says "into"; inputBadge
+// prefixes "in:" for tooltips and root badges.
 export function inputText(tokens, attended) {
   const t = tokens || 0;
   if (!t) return "";
   const c = ctx0(t, attended);
   const tok = `${t.toLocaleString()} tok`;
   return c > 0 ? `${tok} + ${c.toLocaleString()} ctx` : tok;
-}
-
-export function inputSummary(tokens, attended) {
-  const s = inputText(tokens, attended);
-  return s ? `in: ${s}` : "";
 }
 
 // Input text for a collapsed run: total tokens ingested, plus the context
@@ -95,9 +90,19 @@ export function groupInputText(d) {
 }
 
 // The annotation carried by a node's incoming edge: the input flowing into it.
+// A whitelisted node's exact input string is on the graph's whitelist of known
+// constants — passing it is free, so no size is shown, just the tag.
 export function edgeInputLabel(n) {
   if (!n) return "";
+  if (n.whitelisted) return "whitelisted";
   return n.kind === "group" ? groupInputText(n) : inputText(n.tokens, n.attended);
+}
+
+// The node-side variant (root badges + tooltips), with the "in:" prefix.
+export function inputBadge(n) {
+  if (n.whitelisted) return "in: whitelisted (free)";
+  const s = n.kind === "group" ? groupInputText(n) : inputText(n.tokens, n.attended);
+  return s ? `in: ${s}` : "";
 }
 
 // A graphs document may carry its own captions under a non-scene "_meta" key

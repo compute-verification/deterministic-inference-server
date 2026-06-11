@@ -1,5 +1,5 @@
 import { Handle, Position } from "@xyflow/react";
-import { fmtFlops, groupInputText } from "./graph-model.js";
+import { fmtFlops, inputBadge } from "./graph-model.js";
 
 // A collapsed run of N atomic forward passes (e.g. "write p_less.py" = 1200
 // decode nodes). Shows the summed cost; click to expand into the atomic nodes.
@@ -8,12 +8,12 @@ import { fmtFlops, groupInputText } from "./graph-model.js";
 // incoming edge (layout.js); a root group floats it above the card instead.
 export default function GroupNode({ data }) {
   const tip = `${data.count} × ${data.groupKind} forward passes\n`
-    + `in: ${groupInputText(data)}\n`
+    + `${inputBadge(data)}\n`
     + `summed cost: ${fmtFlops(data.flops || 0)}\n`
     + `click to expand`;
   return (
     <>
-      {data.isRoot && <div className="task-in-root">in: {groupInputText(data)}</div>}
+      {data.isRoot && <div className="task-in-root">{inputBadge(data)}</div>}
       <div className="task-node group-node" style={{ borderColor: data.color }} title={tip}>
         <Handle type="target" position={Position.Top} />
         <div className="task-kind" style={{ color: data.color }}>

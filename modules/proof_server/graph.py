@@ -55,27 +55,47 @@ class Graph:
     nodes: list[dict] = field(default_factory=list)   # event fields + computed flops
     edges: list[Edge] = field(default_factory=list)
     shapes: dict = field(default_factory=dict)
+    whitelist: list = field(default_factory=list)     # exact input strings that are free
 
     def to_dict(self) -> dict:
-        return {
+        d = {
             "nodes": self.nodes,
             "edges": [asdict(e) for e in self.edges],
             "shapes": self.shapes,
         }
+        # Only emitted when set, so graphs built without one stay byte-identical.
+        if self.whitelist:
+            d["whitelist"] = self.whitelist
+        return d
 
     def to_json(self) -> str:
         return json.dumps(self.to_dict(), sort_keys=True, separators=(",", ":")) + "\n"
 
 
-def build_graph(trace: dict) -> Graph:
+def build_graph(trace: dict, whitelist: list | None = None) -> Graph:
     """Turn a canonical trace into a Graph, computing each node's exact FLOPs.
 
     ``trace`` = ``{"shapes": {model_key: <config dict>}, "events": [<event dict>...]}``.
     Validates: unique ids; every input id exists and is < this event's id
     (acyclic, no forward refs); known kind; known model.
+
+    ``whitelist`` is a list of exact input strings that are free to pass: a
+    node whose recorded input text (``payload.prompt``) is byte-for-byte equal
+    to an entry is stamped ``whitelisted: true``, and the viewer drops it from
+    input-size accounting. Exact match only — no substring/prefix credit.
+    FLOPs are untouched: the forward pass still ran; what is free is passing a
+    known constant *in*. Falls back to ``trace["whitelist"]`` so tracers and
+    capture converters can carry one without builder-API churn.
     """
     shapes = trace.get("shapes", {})
     events = trace.get("events", [])
+
+    wl = whitelist if whitelist is not None else trace.get("whitelist") or []
+    for entry in wl:
+        if not isinstance(entry, str):
+            raise ValueError(
+                f"whitelist entries must be strings, got {type(entry).__name__}")
+    wl_set = set(wl)
 
     seen: set[int] = set()
     nodes: list[dict] = []
@@ -107,7 +127,10 @@ def build_graph(trace: dict) -> Graph:
         node = dict(ev)
         node["flops"] = F.flops(shape, ev.get("tokens", 0), ev.get("attended", 0),
                                 ev.get("mode", "fwd"), ev.get("logits", 0))
+        prompt = (ev.get("payload") or {}).get("prompt")
+        if isinstance(prompt, str) and prompt in wl_set:
+            node["whitelisted"] = True
         nodes.append(node)
         seen.add(eid)
 
-    return Graph(nodes=nodes, edges=edges, shapes=shapes)
+    return Graph(nodes=nodes, edges=edges, shapes=shapes, whitelist=list(wl))

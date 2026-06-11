@@ -1,5 +1,5 @@
 import { Handle, Position } from "@xyflow/react";
-import { fmtFlops, inputSummary } from "./graph-model.js";
+import { fmtFlops, inputBadge } from "./graph-model.js";
 
 // One task = one forward pass. The card mirrors the original renderer: kind line
 // (with a ✗ for a rejected draft), label, formatted FLOPs, and a proportional
@@ -14,7 +14,7 @@ export default function TaskNode({ data }) {
   return (
     <>
       {data.isRoot && (
-        <div className="task-in-root">{inputSummary(data.tokens, data.attended)}</div>
+        <div className="task-in-root">{inputBadge(data)}</div>
       )}
       <div className={cls} style={{ borderColor: data.color }} title={tip}>
         <Handle type="target" position={Position.Top} />
@@ -39,7 +39,7 @@ export default function TaskNode({ data }) {
 function buildTip(d) {
   const lines = [
     `${d.kind}${d.status ? " · " + d.status : ""}`,
-    inputSummary(d.tokens, d.attended)
+    inputBadge(d)
       + ` · attends ${(d.attended || 0).toLocaleString()} (tok,key) pairs`,
     `cost: ${fmtFlops(d.flops || 0)}`,
   ];

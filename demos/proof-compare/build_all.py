@@ -46,17 +46,23 @@ def _training_trace() -> dict:
     return t_train.trace_training_real(capture)
 
 
-def _coding_trace() -> dict:
-    """Real captured coding-agent run (H100) -> canonical trace.
+def _coding_graph() -> dict:
+    """Real captured coding-agent run (H100) -> canonical trace -> graph.
 
     The capture is one entry per actual LLM call (real prompt/gen token
     counts; capture/run_coding_agent.py); the tracer renders it as a DAG of
     forward passes -- one prefill per call + one decode per generated token,
     fanning out where the agent dispatched parallel calls (4 file reads, 3
     plan candidates, src||test codegen) and fanning back in at merges.
+
+    The agent's task statement is a fixed, publicly-known constant, so it goes
+    on the graph's whitelist: passing exactly that string into the orient call
+    is free and shows no input size in the viewer (the orient FLOPs still
+    count -- the forward pass ran).
     """
     capture = json.loads((TRACES / "coding.real.json").read_text())
-    return t_code.trace_coding_real(capture)
+    return build_graph(t_code.trace_coding_real(capture),
+                       whitelist=[capture["prompt"]]).to_dict()
 
 
 def build_all() -> dict:
@@ -64,7 +70,7 @@ def build_all() -> dict:
         "inference": build_graph(_inference_trace()).to_dict(),
         "spec": build_graph(_spec_trace()).to_dict(),
         "training": build_graph(_training_trace()).to_dict(),
-        "coding": build_graph(_coding_trace()).to_dict(),
+        "coding": _coding_graph(),
     }
 
 

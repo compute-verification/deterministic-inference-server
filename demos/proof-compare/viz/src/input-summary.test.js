@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { ctx0, inputText, inputSummary, groupInputText, edgeInputLabel } from "./graph-model.js";
+import { ctx0, inputText, inputBadge, groupInputText, edgeInputLabel } from "./graph-model.js";
 
 // The node annotation "how big is this pass's input" is DERIVED from the
 // trace's exact attention accounting, not stored: attended = Σ_{j=1..t}(c0+j).
@@ -30,21 +30,33 @@ describe("ctx0", () => {
   });
 });
 
-describe("inputSummary", () => {
+describe("inputBadge", () => {
   it("prefill: tokens only", () => {
-    expect(inputSummary(600, (600 * 601) / 2)).toBe("in: 600 tok");
+    expect(inputBadge({ kind: "prefill", tokens: 600, attended: (600 * 601) / 2 }))
+      .toBe("in: 600 tok");
   });
 
   it("decode: one token plus its context", () => {
-    expect(inputSummary(1, 605)).toBe("in: 1 tok + 604 ctx");
+    expect(inputBadge({ kind: "decode", tokens: 1, attended: 605 })).toBe("in: 1 tok + 604 ctx");
   });
 
   it("large counts get thousands separators", () => {
-    expect(inputSummary(1, 4001)).toBe("in: 1 tok + 4,000 ctx");
+    expect(inputBadge({ kind: "decode", tokens: 1, attended: 4001 }))
+      .toBe("in: 1 tok + 4,000 ctx");
   });
 
   it("empty for a zero-token node", () => {
-    expect(inputSummary(0, 0)).toBe("");
+    expect(inputBadge({ kind: "decode", tokens: 0, attended: 0 })).toBe("");
+  });
+
+  it("a group gets the range form", () => {
+    expect(inputBadge({ kind: "group", tokens: 349, ctxFirst: 864, ctxLast: 1212 }))
+      .toBe("in: 349 tok · ctx 864→1212");
+  });
+
+  it("a whitelisted input is free — no size shown", () => {
+    expect(inputBadge({ kind: "prefill", tokens: 142, attended: 10153, whitelisted: true }))
+      .toBe("in: whitelisted (free)");
   });
 });
 
@@ -75,5 +87,10 @@ describe("edge input labels", () => {
       "349 tok · ctx 864→1212",
     );
     expect(edgeInputLabel(undefined)).toBe("");
+  });
+
+  it("a whitelisted node's edge carries the tag, not a size", () => {
+    expect(edgeInputLabel({ kind: "prefill", tokens: 142, attended: 10153, whitelisted: true }))
+      .toBe("whitelisted");
   });
 });

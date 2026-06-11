@@ -109,8 +109,10 @@ export function buildDisplayGraph(graph, expandedSet = new Set(), opts = {}) {
         segId: s.id,
         count: run.length,
         flops: run.reduce((a, n) => a + (n.flops || 0), 0),
-        tokens: run.reduce((a, n) => a + (n.tokens || 0), 0),
-        attended: run.reduce((a, n) => a + (n.attended || 0), 0),
+        // whitelisted inputs are free to pass — they don't count toward the
+        // run's displayed input size (flops do: the passes still ran)
+        tokens: run.reduce((a, n) => a + (n.whitelisted ? 0 : n.tokens || 0), 0),
+        attended: run.reduce((a, n) => a + (n.whitelisted ? 0 : n.attended || 0), 0),
         // context range across the run, for the "in:" annotation — a sum of
         // attended over separate passes has no single starting context
         ctxFirst: ctx0(first.tokens, first.attended),

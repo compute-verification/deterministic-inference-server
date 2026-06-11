@@ -105,5 +105,63 @@ class TestBuildGraph(unittest.TestCase):
         self.assertEqual(Event(id=0, kind="decode").payload, {})
 
 
+
+class TestWhitelist(unittest.TestCase):
+    """Whitelisted inputs: exact strings that are free to pass into a node.
+
+    A node whose recorded input text (payload.prompt) is byte-for-byte equal
+    to a whitelist entry is stamped whitelisted=True so the viewer drops it
+    from input-size accounting. FLOPs are untouched -- the pass still ran.
+    """
+
+    PROMPT = "Read the mini-paper in paper.md and implement Freivalds' check."
+
+    def trace(self, **payload_kw):
+        return {"shapes": SHAPES, "events": [
+            ev(id=0, kind="prefill", tokens=10, attended=55, inputs=[],
+               payload=dict(payload_kw)),
+            ev(id=1, kind="decode", tokens=1, attended=11, inputs=[0]),
+        ]}
+
+    def test_exact_match_stamps_whitelisted(self):
+        g = build_graph(self.trace(prompt=self.PROMPT), whitelist=[self.PROMPT])
+        self.assertTrue(g.nodes[0].get("whitelisted"))
+        self.assertNotIn("whitelisted", g.nodes[1])  # no prompt -> never free
+
+    def test_flops_are_not_zeroed_by_the_whitelist(self):
+        free = build_graph(self.trace(prompt=self.PROMPT), whitelist=[self.PROMPT])
+        paid = build_graph(self.trace(prompt=self.PROMPT))
+        self.assertEqual(free.nodes[0]["flops"], paid.nodes[0]["flops"])
+
+    def test_near_miss_is_not_a_match(self):
+        # exact string only: substring, superstring, and whitespace all differ
+        for near in (self.PROMPT[:-1], self.PROMPT + " ", " " + self.PROMPT,
+                     self.PROMPT.upper()):
+            g = build_graph(self.trace(prompt=self.PROMPT), whitelist=[near])
+            self.assertNotIn("whitelisted", g.nodes[0], near)
+
+    def test_whitelist_falls_back_to_the_trace_key(self):
+        trace = self.trace(prompt=self.PROMPT)
+        trace["whitelist"] = [self.PROMPT]
+        g = build_graph(trace)
+        self.assertTrue(g.nodes[0].get("whitelisted"))
+
+    def test_param_overrides_trace_whitelist(self):
+        trace = self.trace(prompt=self.PROMPT)
+        trace["whitelist"] = [self.PROMPT]
+        g = build_graph(trace, whitelist=[])
+        self.assertNotIn("whitelisted", g.nodes[0])
+
+    def test_to_dict_carries_whitelist_only_when_set(self):
+        with_wl = build_graph(self.trace(prompt=self.PROMPT),
+                              whitelist=[self.PROMPT]).to_dict()
+        self.assertEqual(with_wl["whitelist"], [self.PROMPT])
+        without = build_graph(self.trace(prompt=self.PROMPT)).to_dict()
+        self.assertNotIn("whitelist", without)  # old graphs stay byte-identical
+
+    def test_non_string_entries_rejected(self):
+        with self.assertRaises(ValueError):
+            build_graph(self.trace(prompt=self.PROMPT), whitelist=[42])
+
 if __name__ == "__main__":
     unittest.main()

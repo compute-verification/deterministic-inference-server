@@ -190,7 +190,8 @@ export async function layoutGraph(graph) {
       markerEnd: { type: "arrowclosed", color: st.stroke, width: 14, height: 14 },
     };
     if (!labeled.has(e.dst)) {
-      const text = edgeInputLabel(byId.get(e.dst));
+      const dn = byId.get(e.dst);
+      const text = edgeInputLabel(dn);
       if (text) {
         labeled.add(e.dst);
         edge.label = text;
@@ -198,6 +199,8 @@ export async function layoutGraph(graph) {
           fill: "#8b949e",
           fontSize: 10,
           fontFamily: 'ui-monospace, "SF Mono", Menlo, Consolas, monospace',
+          // a whitelisted input is a tag, not a size — set it apart
+          ...(dn && dn.whitelisted ? { fontStyle: "italic" } : {}),
         };
         edge.labelBgStyle = { fill: "#0d1117", fillOpacity: 0.85 };
         edge.labelBgPadding = [4, 2];

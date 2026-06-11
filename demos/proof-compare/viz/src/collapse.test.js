@@ -170,3 +170,16 @@ describe("buildDisplayGraph", () => {
     expect(collapsibleSegmentIds(g)).toHaveLength(2);
   });
 });
+
+describe("whitelisted nodes in a collapsed run", () => {
+  it("are excluded from the group's displayed input sums (flops still count)", () => {
+    const g = chain(20, "plan");
+    g.nodes.forEach((n) => { n.attended = 100; });
+    g.nodes[0].whitelisted = true; // its input was a known constant — free
+    const { nodes } = buildDisplayGraph(g);
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0].tokens).toBe(19);       // 20 nodes − 1 whitelisted
+    expect(nodes[0].attended).toBe(1900);   // 2000 − 100
+    expect(nodes[0].flops).toBe(200);       // compute is NOT free
+  });
+});

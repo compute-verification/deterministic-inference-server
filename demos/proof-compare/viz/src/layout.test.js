@@ -118,3 +118,19 @@ describe("layoutGraph input annotations", () => {
     expect(into3[0].label).toBe("5 tok + 20 ctx");
   });
 });
+
+describe("whitelisted edge labels", () => {
+  it("a whitelisted dst gets the italic tag instead of a size", async () => {
+    const graph = {
+      whitelist: ["The task statement"],
+      nodes: [
+        { id: 0, kind: "prefill", tokens: 600, attended: (600 * 601) / 2 },
+        { id: 1, kind: "prefill", tokens: 142, attended: 10153, whitelisted: true },
+      ],
+      edges: [{ src: 0, dst: 1 }],
+    };
+    const { edges: es } = await layoutGraph(graph);
+    expect(es[0].label).toBe("whitelisted");
+    expect(es[0].labelStyle.fontStyle).toBe("italic");
+  });
+});
