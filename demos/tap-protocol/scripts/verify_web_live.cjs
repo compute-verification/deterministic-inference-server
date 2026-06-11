@@ -45,10 +45,10 @@ const EXE = process.env.CHROME ||
   const src = await page.locator("#graph-frame").getAttribute("src");
   if (!/api%2Fgraph|api\/graph|graph%3Fid|graph\?id/.test(decodeURIComponent(src)))
     throw new Error("graph iframe src is not the live graph endpoint: " + src);
-  const frame = page.frame({ url: /graph\// });
-  await frame.waitForSelector(".tab.active", { timeout: 30000 });
+  const fl = page.frameLocator("#graph-frame");
+  await fl.locator(".tab.active").waitFor({ timeout: 30000 });
   console.log("live graph iframe loaded:", decodeURIComponent(src));
-  const active = await frame.locator(".tab.active").textContent();
+  const active = await fl.locator(".tab.active").textContent();
   if (!/Speculative/.test(active)) throw new Error("wrong active scene: " + active);
 
   console.log("console errors:", errors.length ? errors : "none");

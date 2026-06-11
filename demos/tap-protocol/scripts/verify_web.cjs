@@ -43,13 +43,13 @@ const IGNORABLE = /Failed to load resource.*(404|503)/;
   console.log("digest row:",
     (await page.locator(".digest-row .pair").first().textContent()).trim().slice(0, 80));
 
-  // 3. graph panel appears and the embedded viz renders
+  // 3. graph panel appears and the embedded viz renders (frameLocator waits
+  // for the iframe to attach + navigate — page.frame() raced on slow nets)
   await page.waitForSelector("#graph-card.visible", { timeout: 15000 });
-  const frame = page.frame({ url: /graph\// });
-  if (!frame) throw new Error("graph iframe not found");
-  await frame.waitForSelector(".tab", { timeout: 30000 });
-  console.log("iframe tabs:", (await frame.locator(".tab").allTextContents()).join("|"),
-    "active:", await frame.locator(".tab.active").textContent());
+  const fl = page.frameLocator("#graph-frame");
+  await fl.locator(".tab").first().waitFor({ timeout: 30000 });
+  console.log("iframe tabs:", (await fl.locator(".tab").allTextContents()).join("|"),
+    "active:", await fl.locator(".tab.active").textContent());
 
   // 4. replay the coding scenario too; meta must switch to the coding stats
   const metaBefore = await page.locator("#graph-meta").textContent();
