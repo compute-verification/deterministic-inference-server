@@ -21,7 +21,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
+
+# Deterministic cuBLAS workspace -- must be set before any torch import. The
+# 4-node protocol re-runs this whole fine-tune on a second process and bitwise-
+# compares losses + eval text, so the training itself must be reproducible.
+os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
 
 HERE = Path(__file__).resolve().parent
 
@@ -32,6 +38,12 @@ BATCH, SEQ_LEN, STEPS = 4, 64, 12
 EVAL_EVERY = 3
 EVAL_PROMPT = "Deterministic inference means"
 EVAL_GEN = 16
+
+def _progress(kind: str, **fields) -> None:
+    """One machine-readable progress line for the workload runner."""
+    print("PROGRESS " + json.dumps({"type": kind, **fields}, sort_keys=True),
+          flush=True)
+
 
 CORPUS = [
     "Deterministic inference means the same prompt yields the same tokens, bit for bit.",
@@ -50,9 +62,14 @@ def lora_train_capture() -> dict:
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
     torch.manual_seed(0)
+    # error out rather than silently pick a nondeterministic kernel
+    torch.use_deterministic_algorithms(True)
     tok = AutoTokenizer.from_pretrained(MODEL_ID)
+    # eager attention: the SDPA flash/mem-efficient BACKWARD uses atomics and
+    # is nondeterministic -- it would break the bitwise recomp re-run. Eager
+    # (matmul+softmax) is deterministic and fine at toy scale.
     model = AutoModelForCausalLM.from_pretrained(
-        MODEL_ID, dtype=torch.bfloat16).to("cuda")
+        MODEL_ID, dtype=torch.bfloat16, attn_implementation="eager").to("cuda")
     cfg = model.config.to_dict()
 
     # ---- freeze base, inject LoRA on q/v projections -------------------------
@@ -115,6 +132,7 @@ def lora_train_capture() -> dict:
         loss = float(out.loss.item())
         steps.append({"step": s, "loss": loss})
         print(f"step {s:2d}  loss={loss:.4f}", flush=True)
+        _progress("step", step=s, of=STEPS, loss=loss)
 
         if (s + 1) % EVAL_EVERY == 0:
             model.eval()
@@ -123,6 +141,7 @@ def lora_train_capture() -> dict:
             evals.append({"after_step": s + 1, "prompt": EVAL_PROMPT,
                           "prompt_tokens": p, "gen_tokens": g, "text": text})
             print(f"  eval@{s + 1}: {EVAL_PROMPT!r} -> {text!r}", flush=True)
+            _progress("eval", after_step=s + 1, text=text)
 
     return {
         "kind": "lora_training_capture",
@@ -140,6 +159,12 @@ def lora_train_capture() -> dict:
 
 def mock_capture() -> dict:
     losses = [3.1, 2.7, 2.2, 1.8, 1.5, 1.2, 1.0, 0.85, 0.74, 0.66, 0.61, 0.58]
+    # same progress stream shape as the real path, so runner plumbing tests
+    # exercise the forwarding end-to-end on CPU
+    for s in range(STEPS):
+        _progress("step", step=s, of=STEPS, loss=losses[s])
+        if (s + 1) % EVAL_EVERY == 0:
+            _progress("eval", after_step=s + 1, text=" (mock eval text)")
     return {
         "kind": "lora_training_capture_mock",
         "model": MODEL_ID,

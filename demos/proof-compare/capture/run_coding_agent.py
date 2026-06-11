@@ -25,12 +25,18 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import shutil
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+# Deterministic cuBLAS workspace -- must be set before any torch import. The
+# 4-node protocol re-runs this whole capture on a second process and bitwise-
+# compares the captures, so the run itself must be reproducible.
+os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
 
 HERE = Path(__file__).resolve().parent
 WORKSPACE = HERE / "agent_workspace"
@@ -64,6 +70,9 @@ class RealLM:
         import torch
         from transformers import AutoModelForCausalLM, AutoTokenizer
         self.torch = torch
+        # Bitwise re-runnability: error out rather than silently pick a
+        # nondeterministic kernel (greedy forward-only should never need one).
+        torch.use_deterministic_algorithms(True)
         self.tok = AutoTokenizer.from_pretrained(model_id)
         self.model = AutoModelForCausalLM.from_pretrained(
             model_id, dtype=torch.bfloat16).to("cuda").eval()
@@ -175,6 +184,11 @@ class Agent:
         self.calls.append(rec)
         print(f"[{rec['id']:2d}] {phase:<28} p={p:<5} g={g:<5} via={via or '-'}",
               flush=True)
+        # machine-readable progress for the workload runner (one line per call)
+        print("PROGRESS " + json.dumps(
+            {"type": "call", "call": rec["id"], "phase": phase, "role": role,
+             "prompt_tokens": p, "gen_tokens": g},
+            sort_keys=True), flush=True)
         return rec["id"], text
 
 
@@ -239,6 +253,21 @@ def write_named_blocks(text: str, rundir: Path, default_name: str | None) -> lis
     return written
 
 
+def normalize_test_output(out: str, rundir: Path) -> str:
+    """Strip run-specific noise from unittest output.
+
+    This output is fed BACK INTO the next LLM prompt (verdict + fix calls) and
+    recorded in the capture, so any volatile content -- the tempdir path,
+    wall-clock timings, object addresses -- would make the recomp cluster's
+    re-run diverge from the host's (different prompt tokens -> potentially
+    different generations), not just smudge the digest.
+    """
+    out = out.replace(str(rundir), "<rundir>")
+    out = re.sub(r"in \d+\.\d+s", "in N.NNNs", out)
+    out = re.sub(r"0x[0-9a-fA-F]{6,}", "0xADDR", out)
+    return out
+
+
 def run_tests(rundir: Path) -> tuple[bool, str]:
     try:
         proc = subprocess.run(
@@ -248,9 +277,10 @@ def run_tests(rundir: Path) -> tuple[bool, str]:
         # an LLM-written infinite loop must not kill the (paid GPU) capture
         def _s(x):  # TimeoutExpired captures are bytes even with text=True
             return x.decode(errors="replace") if isinstance(x, (bytes, bytearray)) else (x or "")
-        out = (_s(e.stdout) + _s(e.stderr))[-OUTPUT_TAIL:]
+        # normalize BEFORE truncating: a tail-cut path fragment would survive
+        out = normalize_test_output(_s(e.stdout) + _s(e.stderr), rundir)[-OUTPUT_TAIL:]
         return False, "TIMEOUT after 120s running unittest discover\n" + out
-    out = (proc.stdout + proc.stderr)[-OUTPUT_TAIL:]
+    out = normalize_test_output(proc.stdout + proc.stderr, rundir)[-OUTPUT_TAIL:]
     # "Ran 0 tests" exits 0 before Python 3.12 -- a vacuous green is not green.
     return proc.returncode == 0 and "Ran 0 tests" not in out, out
 
@@ -323,6 +353,8 @@ def run_agent(lm) -> dict:
 
     # 6. really run the tests; verdict call reads the real output
     passed, out = run_tests(rundir)
+    print("PROGRESS " + json.dumps(
+        {"type": "tests", "passed": passed, "round": 0}, sort_keys=True), flush=True)
     verdict, _ = ag.call(
         "read test results", "test", codegen,
         f"I ran `python -m unittest discover` in the workspace:\n\n{out}\n\n"
@@ -343,6 +375,9 @@ def run_agent(lm) -> dict:
             "one ```python block per file, whose FIRST line is `# file: <name>`.")
         write_named_blocks(text, rundir, None)
         passed, out = run_tests(rundir)
+        print("PROGRESS " + json.dumps(
+            {"type": "tests", "passed": passed, "round": rounds},
+            sort_keys=True), flush=True)
         verdict, _ = ag.call(
             f"read test results (round {rounds})", "test", [fix],
             f"I re-ran `python -m unittest discover`:\n\n{out}\n\n"
