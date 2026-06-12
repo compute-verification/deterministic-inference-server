@@ -18,6 +18,7 @@ from modules.proof_server.partition import (
     PARTITION_GRAPH_MAGIC,
     PartitionError,
     check_partition,
+    graph_commitment,
     graph_partition_digest,
     partition_graph_bytes,
     plan_partition,
@@ -146,8 +147,44 @@ class TestEncoding(unittest.TestCase):
         self.assertEqual(doc["parts"], [0, 0, 1, 1])
         self.assertEqual(doc["cap_flops"], 200)
         self.assertEqual(doc["auditor_nonce"], "00" * 32)
+        self.assertEqual(doc["blind"], "00" * 32)
         with self.assertRaises(PartitionError):
             sp1_input_json(CHAIN, [0, 0, 1, 1], 200, 20, auditor_nonce="zz" * 32)
+        with self.assertRaises(PartitionError):
+            sp1_input_json(CHAIN, [0, 0, 1, 1], 200, 20, blind_hex="short")
+
+
+class TestCommitment(unittest.TestCase):
+    """The blinded commitment x = sha256(encoding || blind): binding in the
+    graph, hiding via the blind."""
+
+    def test_binding_same_blind_different_graph(self):
+        bumped = json.loads(json.dumps(CHAIN))
+        bumped["nodes"][2]["flops"] += 1
+        b = "ab" * 32
+        self.assertNotEqual(graph_commitment(CHAIN, b), graph_commitment(bumped, b))
+
+    def test_hiding_same_graph_different_blind(self):
+        self.assertNotEqual(graph_commitment(CHAIN, "aa" * 32),
+                            graph_commitment(CHAIN, "bb" * 32))
+
+    def test_zero_blind_reduces_to_appended_zeros_not_bare_digest(self):
+        # x is never equal to the unblinded content digest, even for the
+        # all-zero test blind — the 32 blind bytes are always hashed.
+        self.assertNotEqual(graph_commitment(CHAIN, "00" * 32),
+                            graph_partition_digest(CHAIN))
+
+    def test_commitment_is_exactly_sha256_of_bytes_plus_blind(self):
+        import hashlib
+        b = "cd" * 32
+        expect = hashlib.sha256(
+            partition_graph_bytes(CHAIN) + bytes.fromhex(b)).hexdigest()
+        self.assertEqual(graph_commitment(CHAIN, b), "sha256:" + expect)
+
+    def test_rejects_malformed_blind(self):
+        for bad in ("zz" * 32, "ab", 123):
+            with self.assertRaises((PartitionError, TypeError)):
+                graph_commitment(CHAIN, bad)
 
 
 @unittest.skipUnless(GRAPHS_JSON.exists(), "bundled graphs.json missing")

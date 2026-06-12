@@ -1,16 +1,20 @@
-"""Prove a bounded-cost partition of a task-graph scene in SP1.
+"""Prove a bounded-cost partition of a HIDDEN task-graph scene in SP1.
 
-Loads a scene from traces/graphs.json (the four real H100 task graphs), plans
-a partition under the given caps, pre-flights it with the pure-Python checker,
-then hands graph + partition to the SP1 partition program:
+Two roles, both played here for the demo:
 
-  * the guest re-checks everything (budgets, stage order, whitelist flags)
-    and commits sha256 of the canonical cost-view encoding;
-  * we (the verifier role) recompute that digest from the published graph and
-    compare — a prover cannot claim a cheaper graph than the one published.
+  PROVER  — holds the graph (a scene from traces/graphs.json), draws a random
+            32-byte blind, publishes the blinded commitment
+            x = sha256(canonical-encoding || blind), plans a partition under
+            the given caps, and runs the SP1 program with graph + partition +
+            blind as PRIVATE witnesses.
 
-The partition itself is the private witness: with --prove, the resulting
-proof shows a <=C/<=S stage decomposition EXISTS without revealing it.
+  AUDITOR — receives x out-of-band plus the proof; checks that the proof's
+            public outputs are exactly (nonce, x, C, S, n_parts). The auditor
+            NEVER sees the graph — not even its node count.
+
+The statement proven: "the graph committed to by x has a partition into
+stages where every dependency edge flows forward, each stage's ΣFLOPs <= C,
+and each stage's Σ non-whitelisted input tokens <= S."
 
 Examples:
   # interpreter only (fast; no proof bytes)
@@ -38,7 +42,7 @@ if str(REPO_ROOT) not in sys.path:
 from modules.proof_server.partition import (
     PartitionError,
     check_partition,
-    graph_partition_digest,
+    graph_commitment,
     plan_partition,
     sp1_input_json,
 )
@@ -63,10 +67,12 @@ def main() -> int:
     args = ap.parse_args()
 
     cap_flops, cap_input = int(args.cap_flops), int(args.cap_input)
+
+    # ---- PROVER side -------------------------------------------------------
     graph = json.loads(GRAPHS.read_text())[args.scene]
-    n = len(graph["nodes"])
     total = sum(node["flops"] for node in graph["nodes"])
-    print(f"[scene]   {args.scene}: {n} nodes, total {total:.3e} FLOPs")
+    print(f"[prover]  scene {args.scene}: {len(graph['nodes'])} nodes, "
+          f"total {total:.3e} FLOPs (all private)")
     print(f"[caps]    C={cap_flops:.3e} FLOPs/part, S={cap_input} tokens/part")
 
     try:
@@ -78,8 +84,9 @@ def main() -> int:
     print(f"[plan]    {stats['n_parts']} parts; max part: "
           f"{stats['max_part_flops']:.3e} FLOPs, {stats['max_part_input']} input tokens")
 
-    expected = graph_partition_digest(graph)
-    print(f"[digest]  expected (recomputed from published graph): {expected}")
+    blind = secrets.token_hex(32)
+    published_x = graph_commitment(graph, blind)
+    print(f"[prover]  publishes commitment x = {published_x}")
 
     if not HOST_BIN.exists():
         print(f"[sp1]     SKIPPED — host binary missing at {HOST_BIN}\n"
@@ -88,7 +95,8 @@ def main() -> int:
         return 0
 
     nonce = secrets.token_hex(32)
-    stdin = sp1_input_json(graph, parts, cap_flops, cap_input, nonce).encode()
+    stdin = sp1_input_json(graph, parts, cap_flops, cap_input, nonce,
+                           blind_hex=blind).encode()
 
     if not args.prove:
         r = subprocess.run([str(HOST_BIN), "--execute"], input=stdin,
@@ -97,7 +105,7 @@ def main() -> int:
             print(f"[sp1]     guest REJECTED: {r.stderr.decode(errors='replace')[-300:]}")
             return 1
         public = json.loads(r.stdout.decode().strip().splitlines()[-1])
-        print(f"[sp1]     execute OK; committed digest: {public['graph_digest']}")
+        print("[sp1]     execute OK")
     else:
         args.out.mkdir(parents=True, exist_ok=True)
         proof_path = args.out / f"{args.scene}.proof.bin"
@@ -118,13 +126,17 @@ def main() -> int:
             return 1
         print(f"[sp1]     verify: {v.stdout.decode().strip()}")
 
-    ok = (public["graph_digest"] == expected
+    # ---- AUDITOR side ------------------------------------------------------
+    # Checks ONLY the public outputs against (x, nonce, caps). No graph access.
+    print(f"[auditor] sees: x={public['graph_commitment'][:23]}…, "
+          f"C={public['cap_flops']:.3e}, S={public['cap_input']}, "
+          f"n_parts={public['n_parts']} — and nothing else")
+    ok = (public["graph_commitment"] == published_x
           and public["auditor_nonce"] == nonce
           and public["cap_flops"] == cap_flops
           and public["cap_input"] == cap_input
-          and public["n_nodes"] == n
           and public["n_parts"] == stats["n_parts"])
-    print(f"[check]   digest+nonce+caps match: {'PASS' if ok else 'FAIL'}")
+    print(f"[auditor] commitment+nonce+caps match: {'PASS' if ok else 'FAIL'}")
     return 0 if ok else 1
 
 

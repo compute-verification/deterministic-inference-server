@@ -1,20 +1,27 @@
-"""Bounded-cost partition of a task graph — Python side of the SP1 statement.
+"""Bounded-cost partition of a HIDDEN task graph — Python side of the SP1
+statement.
 
-The SP1 program (``sp1/partition-program``) proves: *there exists a partition
-of the committed task graph into stages such that every dependency edge flows
+The SP1 program (``sp1/partition-program``) proves: *the graph committed to
+by x has a partition into stages such that every dependency edge flows
 forward (the stages are executable in order), each stage's summed FLOPs are
-<= C, and each stage's summed NON-whitelisted input tokens are <= S*. The
-partition is the private witness; the public outputs are only
-(nonce, graph_digest, C, S, n_nodes, n_parts).
+<= C, and each stage's summed NON-whitelisted input tokens are <= S*. Both
+the graph and the partition are private witnesses; the public outputs are
+only (nonce, graph_commitment, C, S, n_parts) — deliberately not even
+n_nodes. The commitment is BLINDED, x = sha256(encoding || blind), so an
+auditor holding x cannot confirm guesses about a low-entropy graph; the
+prover publishes x out-of-band (e.g. inside a signed envelope) and keeps
+graph + blind private.
 
 This module owns everything the host needs around that statement:
 
   * ``partition_graph_bytes(graph)``   — the canonical cost-view encoding the
-    guest re-builds and hashes. MUST stay byte-identical to the Rust
+    guest re-builds in-circuit. MUST stay byte-identical to the Rust
     ``proof_server_lib::partition_graph_bytes``.
-  * ``graph_partition_digest(graph)``  — sha256 over those bytes; what a
-    verifier recomputes from the published graphs.json scene and compares
-    against the proof's committed ``graph_digest``.
+  * ``graph_commitment(graph, blind)`` — the blinded commitment x; what the
+    prover publishes and the guest recomputes inside the proof.
+  * ``graph_partition_digest(graph)``  — UNblinded content digest, for flows
+    where the graph itself is public (transparent integrity binding only —
+    it is not hiding).
   * ``plan_partition(graph, C, S)``    — greedy planner producing a valid
     witness (or raising if none can exist).
   * ``check_partition(...)``           — pure-Python reference checker with
@@ -102,8 +109,35 @@ def partition_graph_bytes(graph: dict) -> bytes:
 
 
 def graph_partition_digest(graph: dict) -> str:
-    """``sha256:<hex>`` digest a verifier recomputes from the published graph."""
+    """UNblinded ``sha256:<hex>`` content digest.
+
+    Only for flows where the graph itself is public (transparent integrity
+    binding). It is deterministic in the graph, hence NOT hiding — use
+    ``graph_commitment`` whenever the auditor must not see the graph.
+    """
     return "sha256:" + hashlib.sha256(partition_graph_bytes(graph)).hexdigest()
+
+
+def _blind_bytes(blind_hex: str) -> bytes:
+    if not (isinstance(blind_hex, str) and len(blind_hex) == 64):
+        raise PartitionError("blind must be 64 hex chars (32 bytes)")
+    try:
+        return bytes.fromhex(blind_hex)
+    except ValueError as exc:
+        raise PartitionError(f"blind is not hex: {exc}") from exc
+
+
+def graph_commitment(graph: dict, blind_hex: str) -> str:
+    """Blinded commitment x = sha256(encoding || blind), as ``sha256:<hex>``.
+
+    This is what the prover publishes (out-of-band) and what the SP1 guest
+    recomputes in-circuit; the auditor compares the two without ever seeing
+    the graph. The 32-byte ``blind`` makes the commitment hiding; the
+    encoding is self-delimiting, so appending the fixed-width blind is
+    unambiguous.
+    """
+    h = hashlib.sha256(partition_graph_bytes(graph) + _blind_bytes(blind_hex))
+    return "sha256:" + h.hexdigest()
 
 
 def _node_input(in_size: int, whitelisted: int) -> int:
@@ -183,17 +217,24 @@ def check_partition(graph: dict, parts: list[int], cap_flops: int, cap_input: in
 
 
 def sp1_input_json(graph: dict, parts: list[int], cap_flops: int, cap_input: int,
-                   auditor_nonce: str = "00" * 32) -> str:
-    """The stdin document for the ``partition-host`` binary."""
+                   auditor_nonce: str = "00" * 32, blind_hex: str = "00" * 32) -> str:
+    """The stdin document for the ``partition-host`` binary.
+
+    ``blind_hex`` is the commitment blinding factor; real provers MUST draw
+    it fresh from a CSPRNG (``secrets.token_hex(32)``) — the all-zero default
+    is for tests only and makes the commitment equal to a non-hiding hash.
+    """
     if not (isinstance(auditor_nonce, str) and len(auditor_nonce) == 64):
         raise PartitionError("auditor_nonce must be 64 hex chars")
     try:
         bytes.fromhex(auditor_nonce)
     except ValueError as exc:
         raise PartitionError(f"auditor_nonce is not hex: {exc}") from exc
+    _blind_bytes(blind_hex)  # validate
     flops, in_size, whitelisted, edges = graph_cost_view(graph)
     return json.dumps({
         "auditor_nonce": auditor_nonce,
+        "blind": blind_hex,
         "cap_flops": _as_int(cap_flops, "cap_flops", _U64_MAX),
         "cap_input": _as_int(cap_input, "cap_input", _U64_MAX),
         "flops": flops,

@@ -19,6 +19,7 @@
 //!
 //!   {
 //!     "auditor_nonce": "<64 hex>",
+//!     "blind": "<64 hex>",                  // commitment blinding factor
 //!     "cap_flops": <u64>, "cap_input": <u64>,
 //!     "flops": [<u64>, ...], "in_size": [<u32>, ...],
 //!     "whitelisted": [0|1, ...],
@@ -66,6 +67,7 @@ struct Args {
 #[derive(Debug, Deserialize)]
 struct InputJson {
     auditor_nonce: String,
+    blind: String,
     cap_flops: u64,
     cap_input: u64,
     flops: Vec<u64>,
@@ -87,6 +89,7 @@ fn parse_input(stdin_json: &str) -> PartitionInput {
     let raw: InputJson = serde_json::from_str(stdin_json).expect("malformed input JSON");
     PartitionInput {
         auditor_nonce: hex_to_32(&raw.auditor_nonce),
+        blind: hex_to_32(&raw.blind),
         flops: raw.flops,
         in_size: raw.in_size,
         whitelisted: raw.whitelisted,
@@ -108,10 +111,9 @@ fn emit_public_outputs(bytes: &[u8]) -> String {
     serde_json::json!({
         "bytes_hex": hex::encode(bytes),
         "auditor_nonce": hex::encode(parsed.auditor_nonce),
-        "graph_digest": format!("sha256:{}", hex::encode(parsed.graph_digest)),
+        "graph_commitment": format!("sha256:{}", hex::encode(parsed.graph_commitment)),
         "cap_flops": parsed.cap_flops,
         "cap_input": parsed.cap_input,
-        "n_nodes": parsed.n_nodes,
         "n_parts": parsed.n_parts,
     })
     .to_string()

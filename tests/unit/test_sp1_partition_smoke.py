@@ -1,11 +1,14 @@
-"""Smoke test for the partition SP1 host binary.
+"""Smoke test for the partition SP1 host binary (hidden-graph statement).
 
 Skipped when the binary isn't compiled (``cargo-prove`` and a usable
 ``protoc`` aren't on every dev machine). When it IS available, this runs the
 partition program in SP1's execute mode and verifies that the program's
-committed ``graph_digest`` matches the Python side's byte-stable encoding —
+committed ``graph_commitment`` equals the Python side's blinded commitment —
 the single point exercising Python<->Rust agreement on the
 taskgraph-partition-v1 canonical bytes.
+
+The auditor role here checks ONLY (commitment, caps, n_parts): it never
+recomputes anything from the graph itself.
 """
 from __future__ import annotations
 
@@ -22,7 +25,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from modules.proof_server.partition import (
     check_partition,
-    graph_partition_digest,
+    graph_commitment,
     plan_partition,
     sp1_input_json,
 )
@@ -41,6 +44,7 @@ GRAPH = {
 }
 CAP_FLOPS, CAP_INPUT = 1800, 52
 NONCE = "11" * 32
+BLIND = "22" * 32
 
 
 def _have_sp1() -> bool:
@@ -55,36 +59,55 @@ def _run(input_json: str) -> subprocess.CompletedProcess:
 @unittest.skipUnless(_have_sp1(),
                      "partition-host binary missing; install sp1up + protoc and rebuild")
 class TestSP1PartitionSmoke(unittest.TestCase):
-    def test_valid_partition_commits_matching_digest(self):
+    def test_valid_partition_commits_matching_commitment(self):
         parts = plan_partition(GRAPH, CAP_FLOPS, CAP_INPUT)
         stats = check_partition(GRAPH, parts, CAP_FLOPS, CAP_INPUT)
 
-        result = _run(sp1_input_json(GRAPH, parts, CAP_FLOPS, CAP_INPUT, NONCE))
+        result = _run(sp1_input_json(GRAPH, parts, CAP_FLOPS, CAP_INPUT, NONCE,
+                                     blind_hex=BLIND))
         if result.returncode != 0:
             self.fail(f"partition-host exited {result.returncode}\n"
                       f"stderr: {result.stderr.decode(errors='replace')[-400:]}")
         public = json.loads(result.stdout.decode().strip().splitlines()[-1])
 
-        # The verifier's job: recompute the digest from the published graph
-        # and check SP1 committed exactly that, under exactly these caps.
-        self.assertEqual(public["graph_digest"], graph_partition_digest(GRAPH))
+        # Auditor's view: the published commitment, caps, and stage count.
+        # NOTHING here is derived from the graph at verification time.
+        published_x = graph_commitment(GRAPH, BLIND)  # prover published this
+        self.assertEqual(public["graph_commitment"], published_x)
         self.assertEqual(public["auditor_nonce"], NONCE)
         self.assertEqual(public["cap_flops"], CAP_FLOPS)
         self.assertEqual(public["cap_input"], CAP_INPUT)
-        self.assertEqual(public["n_nodes"], 4)
         self.assertEqual(public["n_parts"], stats["n_parts"])
+        # The graph is not disclosed by the public outputs.
+        self.assertNotIn("n_nodes", public)
+        self.assertNotIn("graph_digest", public)
+
+    def test_blind_changes_the_commitment(self):
+        # Hiding: the same graph under two blinds yields unrelated
+        # commitments, both reproduced exactly in-guest.
+        parts = plan_partition(GRAPH, CAP_FLOPS, CAP_INPUT)
+        outs = []
+        for blind in ("aa" * 32, "bb" * 32):
+            result = _run(sp1_input_json(GRAPH, parts, CAP_FLOPS, CAP_INPUT, NONCE,
+                                         blind_hex=blind))
+            self.assertEqual(result.returncode, 0, result.stderr[-300:])
+            public = json.loads(result.stdout.decode().strip().splitlines()[-1])
+            self.assertEqual(public["graph_commitment"], graph_commitment(GRAPH, blind))
+            outs.append(public["graph_commitment"])
+        self.assertNotEqual(outs[0], outs[1])
 
     def test_over_budget_part_aborts_guest(self):
         # All four nodes in one part blows the FLOP cap -> guest assert fires
         # -> zero public-output bytes -> host exits 10.
-        result = _run(sp1_input_json(GRAPH, [0, 0, 0, 0], CAP_FLOPS, CAP_INPUT, NONCE))
+        result = _run(sp1_input_json(GRAPH, [0, 0, 0, 0], CAP_FLOPS, CAP_INPUT, NONCE,
+                                     blind_hex=BLIND))
         self.assertNotEqual(result.returncode, 0,
                             "over-budget partition should have failed the guest")
 
     def test_backward_edge_between_parts_aborts_guest(self):
         # parts must not decrease along an edge: 0 -> 1 with part 1 -> 0.
-        result = _run(sp1_input_json(
-            GRAPH, [1, 0, 1, 1], 10**9, 10**9, NONCE))
+        result = _run(sp1_input_json(GRAPH, [1, 0, 1, 1], 10**9, 10**9, NONCE,
+                                     blind_hex=BLIND))
         self.assertNotEqual(result.returncode, 0,
                             "backward edge between parts should have failed the guest")
 
@@ -94,13 +117,14 @@ class TestSP1PartitionSmoke(unittest.TestCase):
         stripped = json.loads(json.dumps(GRAPH))
         stripped["nodes"][0].pop("whitelisted")
         parts = plan_partition(GRAPH, CAP_FLOPS, CAP_INPUT)
-        result = _run(sp1_input_json(stripped, parts, CAP_FLOPS, CAP_INPUT, NONCE))
+        result = _run(sp1_input_json(stripped, parts, CAP_FLOPS, CAP_INPUT, NONCE,
+                                     blind_hex=BLIND))
         self.assertNotEqual(result.returncode, 0,
                             "without the whitelist the same partition must bust S")
-        # ...and the stripped graph hashes differently, so it could not be
-        # passed off as the whitelisted one anyway.
-        self.assertNotEqual(graph_partition_digest(stripped),
-                            graph_partition_digest(GRAPH))
+        # ...and the stripped graph commits differently under the same blind,
+        # so it could not be passed off as the whitelisted one anyway.
+        self.assertNotEqual(graph_commitment(stripped, BLIND),
+                            graph_commitment(GRAPH, BLIND))
 
 
 if __name__ == "__main__":

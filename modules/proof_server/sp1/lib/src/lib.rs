@@ -94,16 +94,21 @@ pub const PARTITION_GRAPH_MAGIC: &[u8] = b"taskgraph-partition-v1\n";
 
 /// All inputs to the partition SP1 program.
 ///
-/// The graph's cost view (`flops`, `in_size`, `whitelisted`, `edges`) is
-/// re-encoded and hashed *inside the guest*, so the committed `graph_digest`
-/// binds the proof to exactly these numbers — a prover cannot shrink a node's
-/// FLOPs without changing the digest the verifier recomputes from the
-/// published graph. The `parts` assignment is the private witness: the proof
+/// EVERYTHING about the graph is private. The guest re-encodes the cost view
+/// (`flops`, `in_size`, `whitelisted`, `edges`) and computes the blinded
+/// commitment sha256(encoding || blind) *inside the circuit*, committing only
+/// that 32-byte value — so the proof binds to exactly these numbers without
+/// the verifier ever seeing them. The blind makes the commitment hiding: a
+/// bare content hash would let an auditor confirm guesses about a
+/// low-entropy graph. The `parts` assignment is likewise private: the proof
 /// shows a valid bounded partition EXISTS without revealing it.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PartitionInput {
     /// 32-byte opaque nonce from the auditor, committed back unchanged.
     pub auditor_nonce: [u8; 32],
+    /// 32-byte random blinding factor for the graph commitment. Private;
+    /// held by the prover (and whoever legitimately holds the graph).
+    pub blind: [u8; 32],
     /// Per-node exact FLOPs, in node-id (= topological) order.
     pub flops: Vec<u64>,
     /// Per-node ingested input size (tokens), same order.
@@ -124,10 +129,10 @@ pub struct PartitionInput {
     pub cap_input: u64,
 }
 
-/// Canonical byte encoding of a task graph's cost view. The guest hashes
-/// this to produce the committed `graph_digest`; the Python side
-/// (`modules.proof_server.partition.partition_graph_bytes`) must produce
-/// identical bytes from the published graph JSON.
+/// Canonical byte encoding of a task graph's cost view. The guest computes
+/// the blinded commitment sha256(encoding || blind) over this; the Python
+/// side (`modules.proof_server.partition.partition_graph_bytes`) must
+/// produce identical bytes from the graph JSON.
 pub fn partition_graph_bytes(
     flops: &[u64],
     in_size: &[u32],
@@ -151,15 +156,18 @@ pub fn partition_graph_bytes(
     out
 }
 
-/// Layout of the partition program's public output bytes (88 bytes).
-pub const PARTITION_PUBLIC_OUTPUT_LEN: usize = 32 + 32 + 8 + 8 + 4 + 4;
+/// Layout of the partition program's public output bytes (84 bytes).
+///
+/// Deliberately NOT included: n_nodes (or anything else about the graph) —
+/// the auditor learns only the commitment, the caps, and the stage count.
+pub const PARTITION_PUBLIC_OUTPUT_LEN: usize = 32 + 32 + 8 + 8 + 4;
 
 pub struct PartitionPublicOutputs {
     pub auditor_nonce: [u8; 32],
-    pub graph_digest: [u8; 32],
+    /// Blinded commitment sha256(taskgraph-partition-v1 encoding || blind).
+    pub graph_commitment: [u8; 32],
     pub cap_flops: u64,
     pub cap_input: u64,
-    pub n_nodes: u32,
     pub n_parts: u32,
 }
 
@@ -170,12 +178,11 @@ impl PartitionPublicOutputs {
         }
         let mut nonce = [0u8; 32];
         nonce.copy_from_slice(&b[0..32]);
-        let mut graph_digest = [0u8; 32];
-        graph_digest.copy_from_slice(&b[32..64]);
+        let mut graph_commitment = [0u8; 32];
+        graph_commitment.copy_from_slice(&b[32..64]);
         let cap_flops = u64::from_le_bytes(b[64..72].try_into().ok()?);
         let cap_input = u64::from_le_bytes(b[72..80].try_into().ok()?);
-        let n_nodes = u32::from_le_bytes(b[80..84].try_into().ok()?);
-        let n_parts = u32::from_le_bytes(b[84..88].try_into().ok()?);
-        Some(Self { auditor_nonce: nonce, graph_digest, cap_flops, cap_input, n_nodes, n_parts })
+        let n_parts = u32::from_le_bytes(b[80..84].try_into().ok()?);
+        Some(Self { auditor_nonce: nonce, graph_commitment, cap_flops, cap_input, n_parts })
     }
 }

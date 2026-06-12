@@ -10,19 +10,23 @@ the raw signature stays inside the developer trust boundary.
 (`ledger ⊆ signed-Merkle-log`). See `demos/proof-server/plan.md` for the
 demo design.
 
-**Second statement — bounded-cost partition.** Given a task graph (one node
-per forward pass, exact per-node FLOPs + input tokens + whitelist flags —
-the graphs `demos/proof-compare/build_all.py` emits), the
-`sp1/partition-program` guest proves: *there exists a partition of the graph
-into stages such that every dependency edge flows forward (the stages are
-executable in order), each stage's summed FLOPs are ≤ C, and each stage's
-summed non-whitelisted input tokens are ≤ S*. The partition is the private
-witness; public outputs are only (nonce, graph digest, C, S, n_nodes,
-n_parts). The graph's cost view is hashed **in-guest**
-(`taskgraph-partition-v1` canonical encoding, byte-identical between
-`partition.py` and `proof_server_lib`), so a verifier recomputes the digest
-from the published graphs.json scene and rejects any proof over different
-numbers. Whitelisted inputs (publicly-known constants, e.g. the coding
+**Second statement — bounded-cost partition of a hidden graph.** Given a
+task graph (one node per forward pass, exact per-node FLOPs + input tokens +
+whitelist flags — the graphs `demos/proof-compare/build_all.py` emits), the
+`sp1/partition-program` guest proves: *the graph committed to by x has a
+partition into stages such that every dependency edge flows forward (the
+stages are executable in order), each stage's summed FLOPs are ≤ C, and each
+stage's summed non-whitelisted input tokens are ≤ S*. The graph AND the
+partition are private witnesses; public outputs are only (nonce, x, C, S,
+n_parts) — deliberately not even the node count. x is a **blinded**
+commitment sha256(`taskgraph-partition-v1` canonical encoding ‖ 32-byte
+random blind), computed **in-circuit** (encoding byte-identical between
+`partition.py` and `proof_server_lib`): binding because the guest re-derives
+x from the very numbers it budget-checks, hiding because of the blind (a
+bare content hash would let an auditor confirm guesses about a low-entropy
+graph). The prover publishes x out-of-band (e.g. inside a signed envelope);
+the auditor compares it against the proof's public outputs and never sees
+the graph. Whitelisted inputs (publicly-known constants, e.g. the coding
 agent's fixed task statement) cost 0 toward S — the whitelist never
 discounts FLOPs. Driver:
 `python3 demos/proof-compare/prove_partition.py --scene coding

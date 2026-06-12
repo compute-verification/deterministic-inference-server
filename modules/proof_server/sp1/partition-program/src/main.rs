@@ -1,6 +1,6 @@
-//! SP1 guest: bounded-cost partition of a task graph.
+//! SP1 guest: bounded-cost partition of a COMMITTED (hidden) task graph.
 //!
-//! Statement: "I know a partition of the committed task graph into k stages
+//! Statement: "The graph committed to by x has a partition into k stages
 //! such that
 //!   (a) every dependency edge flows from an earlier-or-equal stage to a
 //!       later-or-equal stage — i.e. the stages can be executed in order;
@@ -8,21 +8,22 @@
 //!   (c) each stage's summed NON-WHITELISTED input tokens are <= S
 //!       (whitelisted inputs are publicly-known constants and free to pass)."
 //!
-//! The partition assignment is the PRIVATE witness — the proof shows such a
-//! partition exists without revealing it. The graph's cost view (per-node
-//! flops, input size, whitelist flag, and the edge list) is re-encoded and
-//! hashed in-guest, so the committed digest binds the proof to exactly those
-//! numbers; the verifier recomputes the digest from the published graph JSON
-//! (modules.proof_server.partition.graph_partition_digest) and rejects on
-//! mismatch.
+//! The graph AND the partition are PRIVATE witnesses. The guest re-encodes
+//! the graph's cost view and computes the blinded commitment
+//! x = sha256(taskgraph-partition-v1 encoding || blind) in-circuit, so the
+//! proof binds to exactly those numbers while the auditor sees only x. The
+//! blind keeps the commitment hiding — a bare content hash would let an
+//! auditor confirm guesses about a low-entropy graph. The auditor checks x
+//! against the commitment the prover published out-of-band (e.g. inside a
+//! signed envelope) and never sees the graph.
 //!
 //! Public outputs (committed at the end of `main`, in this order):
 //!   - 32 bytes: auditor_nonce
-//!   - 32 bytes: graph_digest = sha256(taskgraph-partition-v1 encoding)
+//!   - 32 bytes: graph_commitment x (blinded; see above)
 //!   - 8 bytes:  cap_flops C (le u64)
 //!   - 8 bytes:  cap_input S (le u64)
-//!   - 4 bytes:  n_nodes (le u32)
 //!   - 4 bytes:  n_parts (le u32)
+//! Deliberately absent: n_nodes or anything else describing the graph.
 
 #![no_main]
 
@@ -104,19 +105,21 @@ pub fn main() {
         assert!(input_sum[p] <= input.cap_input as u128, "part exceeds input cap S");
     }
 
-    // Bind the proof to the graph: hash the canonical cost-view encoding.
+    // Bind the proof to the (hidden) graph: blinded commitment over the
+    // canonical cost-view encoding. The encoding is self-delimiting (magic +
+    // length fields), so appending the fixed-width blind is unambiguous.
     let graph_bytes =
         partition_graph_bytes(&input.flops, &input.in_size, &input.whitelisted, &input.edges);
     let mut hasher = Sha256::new();
     hasher.update(&graph_bytes);
-    let graph_digest: [u8; 32] = hasher.finalize().into();
+    hasher.update(&input.blind);
+    let graph_commitment: [u8; 32] = hasher.finalize().into();
 
     let mut out: Vec<u8> = Vec::with_capacity(PARTITION_PUBLIC_OUTPUT_LEN);
     out.extend_from_slice(&input.auditor_nonce);
-    out.extend_from_slice(&graph_digest);
+    out.extend_from_slice(&graph_commitment);
     out.extend_from_slice(&input.cap_flops.to_le_bytes());
     out.extend_from_slice(&input.cap_input.to_le_bytes());
-    out.extend_from_slice(&(n as u32).to_le_bytes());
     out.extend_from_slice(&n_parts.to_le_bytes());
     sp1_zkvm::io::commit_slice(&out);
 }

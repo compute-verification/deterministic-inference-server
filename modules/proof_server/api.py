@@ -36,6 +36,7 @@ from modules.proof_server.ledger import (
 from modules.proof_server.partition import (
     PartitionError,
     check_partition,
+    graph_commitment,
     graph_partition_digest,
     partition_graph_bytes,
     plan_partition,
@@ -63,6 +64,7 @@ __all__ = [
     # bounded-cost partition (sp1/partition-program)
     "PartitionError",
     "check_partition",
+    "graph_commitment",
     "graph_partition_digest",
     "partition_graph_bytes",
     "plan_partition",
