@@ -17,7 +17,7 @@ wiring check that runs in CI and on a laptop — **not** a determinism proof.
 
 All recipes lean on two things from `modules/`:
 
-1. **`Pipeline`** — chains the artifact spine (`manifest.v1 → lockfile.v1 →
+1. **`Pipeline`** — chains the four stages (`manifest.v1 → lockfile.v1 →
    run_bundle.v1 → verify_report.v1`) in a few lines.
 2. **Capability facades** — `modules.network`, `modules.inference`,
    `modules.attestation`, … for the pieces that aren't just "run the pipeline."

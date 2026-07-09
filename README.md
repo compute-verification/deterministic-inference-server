@@ -134,20 +134,18 @@ Requirements:
 
 ### Mock pipeline (no GPU)
 
-Runs the pipeline against a mock backend. No GPU, no model download; this checks
-wiring only, not determinism:
+To inspect the pipeline's artifacts without a GPU (inference is mocked, so this
+proves nothing about determinism):
 
 ```bash
-uv sync   # installs the pinned CPU/test deps from uv.lock
-
+uv sync
 tmp=$(mktemp -d)
 .venv/bin/python3 modules/inference/resolver/main.py --manifest modules/inference/manifests/qwen3-1.7b.manifest.json \
   --lockfile-out $tmp/lock.json
 .venv/bin/python3 modules/build/builder/main.py --lockfile $tmp/lock.json --lockfile-out $tmp/built.json
 .venv/bin/python3 modules/inference/runner/main.py --manifest modules/inference/manifests/qwen3-1.7b.manifest.json \
   --lockfile $tmp/built.json --out-dir $tmp/run --mode mock
-# Produces a run bundle with tokens, logits, and deterministic network frames.
-# (Add --resolve-hf to the resolver to re-resolve revisions against live HF; needs network + huggingface_hub.)
+# $tmp/run now holds a run bundle: tokens, logits, network frames.
 ```
 
 The same pipeline can be composed in Python; see [`workflows/`](workflows/).

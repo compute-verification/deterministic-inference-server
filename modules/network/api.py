@@ -29,7 +29,7 @@ def egress_frames(
 
     Args:
         payload: Application-layer response bytes.
-        manifest/lockfile: Parsed spine artifacts (drive the network config).
+        manifest/lockfile: Parsed pipeline artifacts (drive the network config).
         dst_mac: Destination MAC for the egress frames.
         backend: ``"sim"`` (pure Python) or ``"dpdk"`` (real NIC).
         conn_index: Logical connection index (deterministic per-connection ISN).

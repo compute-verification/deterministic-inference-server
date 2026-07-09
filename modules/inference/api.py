@@ -1,7 +1,7 @@
 """Deterministic inference — stable public API. See ``README.md``.
 
 Bitwise-deterministic vLLM serving via the "c3" config. Wraps the runner
-(mock or vLLM) and the verifier from the artifact spine.
+(mock or vLLM) and the verifier.
 """
 from __future__ import annotations
 

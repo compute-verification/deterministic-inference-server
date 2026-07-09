@@ -1,7 +1,7 @@
 """Shared determinism helpers — stable public API. See ``README.md``.
 
 Re-exports the canonical-JSON / digest / schema-validation primitives the whole
-artifact spine relies on (``modules.core.common``). Cloud provisioning and the
+pipeline relies on (``modules.core.common``). Cloud provisioning and the
 replay-server routine live in ``scripts/deploy/*`` (shell) and are documented in the
 README rather than wrapped here.
 """

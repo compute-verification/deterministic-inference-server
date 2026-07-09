@@ -17,7 +17,7 @@ from modules.core.common.contracts import validate_with_schema
 ```
 
 **Artifacts.** N/A directly — provisions the environments the other capabilities
-run in, and provides the canonical-JSON / digest helpers the whole spine relies on.
+run in, and provides the canonical-JSON / digest helpers the whole pipeline relies on.
 
 **Requirements.** Cloud API keys (Lambda / Vast) for provisioning; nothing for
 the helpers.

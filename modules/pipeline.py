@@ -1,6 +1,6 @@
 """Compose the deterministic inference stages as a few readable Python lines.
 
-The artifact spine ``manifest.v1 -> lockfile.v1 -> run_bundle.v1 ->
+The pipeline ``manifest.v1 -> lockfile.v1 -> run_bundle.v1 ->
 verify_report.v1`` already exists across ``cmd/{resolver,builder,runner,
 verifier}``; :class:`Pipeline` wraps it so a workflow is a shareable file
 instead of an ad-hoc bash script::
@@ -12,8 +12,8 @@ instead of an ad-hoc bash script::
               .run("/tmp/b")         # -> run_bundle.v1 (independent run)
               .verify())             # -> verify_report.v1 ("conformant" iff identical)
 
-``resolve``/``build`` pass dicts in memory; ``run``/``verify`` use the spine's
-on-disk run bundles (the verifier compares bundle files).
+``resolve``/``build`` pass dicts in memory; ``run``/``verify`` use on-disk
+run bundles (the verifier compares bundle files).
 """
 from __future__ import annotations
 

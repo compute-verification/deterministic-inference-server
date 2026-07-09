@@ -47,14 +47,14 @@ noted below.
 | PoSE `pose` package | memory | `modules/memory/pose/` |
 | `scripts/deploy/`, `scripts/lambda/lambda_cli.py` | utils | under `scripts/` (deploy scripts + Lambda CLI) |
 | `workflows/` | shared (recipe book) | `workflows/` — module compositions via `modules.Pipeline` |
-| `tests/` | per-module + shared | `tests/modules/` per capability; `unit/integration/e2e/determinism` cover the spine |
+| `tests/` | per-module + shared | `tests/modules/` per capability; `unit/integration/e2e/determinism` cover the pipeline |
 | `scripts/`, `scripts/ci/` | shared / platform | repo root |
 | `demos/{e2e-audit, prover-verifier}/` | inference / attestation | `demos/` — runnable scenarios (audit replay, prover↔verifier protocol) referenced by `scripts/demo.sh` and the README. Research experiments live on the `experiments` branch. |
 | `README.md`, `CLAUDE.md`, `LICENSE`, `CITATION.cff`, `.gitignore`, `.github/`, `.claude/` | repo-level | repo root |
 
 ## The unified interface
 
-Everything speaks the artifact spine:
+Everything speaks the same four artifacts:
 
 ```
 manifest.v1  ──resolve──▶  lockfile.v1  ──build──▶  lockfile.v1(+closure)
