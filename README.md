@@ -1,38 +1,24 @@
 # Deterministic Inference Server
 
-This repository contains a demonstration of a deterministic inference server:
+This repository implements an inference server whose egress traffic is a deterministic function of its ingress traffic. As a result, a verifier can check that the egress traffic is correct by re-executing the inference server's computation. We achieve this primarily through three interventions:
+- The image in which the inference server is run is built deterministically using Nix. As a result, when a verifier re-executes the inference server's computation, it can trust that the image is correct.
+- Inference is made deterministic using batch-invariant kernels, deterministic cuBLAS kernels, eager execution, and greedy decoding with a fixed seed.
+- Tokens are emitted as egress traffic using a custom deterministic userspace TCP/IP stack. 
 
-- **Builds** are rendered deterministic via a hermetic Nix flake that compiles vLLM, PyTorch, CUDA, and Triton from pinned sources, with model weights pinned to a Hugging Face commit and checked against per-file SHA256 digests
-- **Output tokens** are rendered deterministic via vLLM's batch-invariant kernels, deterministic cuBLAS kernels, eager execution, and greedy decoding with a fixed seed
-- **Network packets** are rendered deterministic via a custom userspace TCP/IP stack that builds frames as deterministic functions of payloads
+These interventions guarantee that egress traffic can be bitwise re-executed on a machine _with the same hardware_ as the machine that originally produced the egress traffic. The current implementation does not enable bitwise re-execution on machines with different accelerators because different accelerators handle floating-point operations differently. In the future we will use [Hawkeye](https://arxiv.org/abs/2603.20421) so that requests can be bitwise re-executed on different hardware. We further demonstrate [proof of secure erasure](https://en.wikipedia.org/wiki/Proof_of_secure_erasure), which can be used to erase covert state on the hardware running the inference server.
 
-This guarantees that individual inference requests can be bitwise reproduced at a later date, given the original hardware. In the future we will use [Hawkeye](https://arxiv.org/abs/2603.20421) so that requests can be re-executed on different hardware. We further demonstrate [proof of secure erasure](https://en.wikipedia.org/wiki/Proof_of_secure_erasure).
+We have tested the reproducibility of egress traffic when serving several models, including mixture-of-experts models. Across over 5 million tokens and three models, we did not observe a single token or egress bit that could was not bitwise reproduced by the verifier.
 
 Licensed under [Apache-2.0](LICENSE).
 
-## Modules & layout
-
-Each module lives in [`modules/`](modules/); [`workflows/`](workflows/)
-composes them into runnable scenarios.
-
-| Module | What it does | Start here |
-|---|---|---|
-| [build](modules/build/) | Hermetic, reproducible runtime + OCI image | `nix build .#oci` |
-| [inference](modules/inference/) | Bitwise-deterministic vLLM (the c3 config) | `modules/inference/` |
-| [network](modules/network/) | Deterministic L2 egress frames | `modules.network.egress_frames(...)` |
-| [memory](modules/memory/) | PoSE memory wipe + erasure attestation | `modules/memory/` |
-| [attestation](modules/attestation/) | Matmul / token / replay verification | `modules/attestation/verifier`, `modules/attestation/freivalds` |
-| [utils](modules/utils/) | Provisioning, replay server, helpers | `scripts/deploy/`, `scripts/lambda/lambda_cli.py` |
-
-See [`modules/README.md`](modules/README.md) for the full map. Design and
-implementation plans live on the `experiments` branch.
-
 ### Repository layout
+
+This repository consists of small units of code that implement specific features called _modules_ that are composed to define _workflows_, which are executable programs.
 
 ```
 modules/                Each module owns its code, plus shared core/ + Pipeline
   build/                Hermetic runtime: builder/ + lockfiles/ + nix/   (flake.nix + flake.lock live at root)
-  inference/            Deterministic vLLM — the c3 config
+  inference/            Deterministic vLLM
     server/             Proxy server with POST/GET /manifest endpoint
     resolver/           Manifest + HF resolution -> lockfile
     runner/             Manifest + lockfile -> run bundle (mock or vLLM)
@@ -52,61 +38,6 @@ tests/conformance/      Spec conformance catalog + release blockers (read by CI)
 flake.nix, flake.lock   Hermetic build entrypoint + pin (at root: src=self packages repo-wide code; callers invoke `.#`)
 ```
 
-## Results
-
-These results come from a manual cross-server run on two independent NVIDIA GH200 480GB instances on Lambda Cloud. Every cross-server comparison matched bitwise:
-
-| Model | Type | Repeated | Diverse | Tokens |
-|-------|------|----------|---------|--------|
-| Qwen3-1.7B | Dense transformer | 20/20 match | 34/34 match | 1.6M |
-| Qwen3-30B-A3B | Mixture of Experts | 20/20 match | 34/34 match | 2.0M |
-| Mistral-7B-Instruct-v0.3 | Dense transformer | 20/20 match | 34/34 match | 2.0M |
-
-Each chunk is 30,000 tokens of greedy decoding (temperature=0). Both servers ran the same container image with the same seed and the same config. The scripts used to produce these runs live under `experiments/single-node-determinism/` on the [`experiments` branch](../../tree/experiments).
-
-## Architecture
-
-```
-                             Inference Server
- ┌──────────────────────────────────────────────────────────────────────┐
- │                                                                      │
- │  ┌──────────┐    ┌──────────┐    ┌──────────────────────────────┐    │
- │  │ Manifest │───>│ Resolver │───>│ Resolved manifest + Lockfile │    │
- │  │ (author) │    │          │    │ (pinned revisions, digests)  │    │
- │  └──────────┘    └──────────┘    └───────────────┬──────────────┘    │
- │                                                  │                   │
- │                                                  v                   │
- │  ┌────────────────────────────────────────────────────────────────┐  │
- │  │                    Nix Container Image                         │  │
- │  │  ┌──────────────────────────────────────────────────────────┐  │  │
- │  │  │ Proxy Server (modules/inference/server/main.py)          │  │  │
- │  │  │  POST /manifest ── validate schema                       │  │  │
- │  │  │                 ── verify GPU model, count, driver       │  │  │
- │  │  │                 ── verify model file digests             │  │  │
- │  │  │                 ── start vLLM with manifest settings     │  │  │
- │  │  │  GET  /manifest ── return active config + health         │  │  │
- │  │  │  POST /v1/...   ── proxy to vLLM + capture log           │  │  │
- │  │  └──────────────────────────┬───────────────────────────────┘  │  │
- │  │                             │                                  │  │
- │  │                             v                                  │  │
- │  │  ┌──────────────────────────────────────────────────────────┐  │  │
- │  │  │ vLLM 0.17.1 (VLLM_BATCH_INVARIANT=1, --enforce-eager)    │  │  │
- │  │  │  --model, --revision, --seed, --dtype,                   │  │  │
- │  │  │  --attention-backend, --max-model-len, ...               │  │  │
- │  │  │  (every manifest field passed as CLI flag or env var)    │  │  │
- │  │  └──────────────────────────────────────────────────────────┘  │  │
- │  └────────────────────────────────────────────────────────────────┘  │
- │                                                                      │
- │  ┌──────────┐    ┌──────────┐    ┌───────────┐    ┌──────────────┐   │
- │  │  Runner  │───>│ Capture  │───>│ Run Bundle│───>│   Verifier   │   │
- │  │(tokens,  │    │(request/ │    │(observ-   │    │(compare two  │   │
- │  │ logits,  │    │ response │    │ ables,    │    │ bundles via  │   │
- │  │ frames)  │    │ logging) │    │ frames,   │    │ comparison   │   │
- │  │          │    │          │    │ provenance│    │ config)      │   │
- │  └──────────┘    └──────────┘    └───────────┘    └──────────────┘   │
- └──────────────────────────────────────────────────────────────────────┘
-```
-
 ## Quick start
 
 Bring up an NVIDIA H100 instance with the standard CUDA 12.8 AMI (Lambda Cloud's `gpu_1x_h100_sxm5` and `gpu_1x_h100_pcie` work as-is; GH200 also works), then:
@@ -117,7 +48,7 @@ cd deterministic-inference-server
 ./scripts/demo.sh
 ```
 
-`scripts/demo.sh` builds a venv (cu128 torch + vLLM 0.17.1), resolves the audit-enabled smoke manifest at `demos/e2e-audit/scripts/smoke.manifest.json` (declares H100 hardware, Qwen3-1.7B, 2 short prompts), starts the deterministic server, and runs the audit replay loop:
+`scripts/demo.sh` builds a venv (cu128 torch + vLLM 0.17.1), starts the deterministic server, and runs the audit replay loop:
 
 1. `POST /run` — server runs the manifest's requests and returns per-output-token HMAC commitments
 2. `POST /replay` at random token positions — server re-runs each request truncated to the challenged position and recomputes the commitment
